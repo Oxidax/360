@@ -79,13 +79,27 @@ V1/
 | `GET`    | `/api/leaderboard`  | Top N (`?limit=10`)                                  |
 | `POST`   | `/api/score`        | `{ name, spins, durationMs }` → renvoie le rang      |
 | `POST`   | `/api/gamble`       | `{ id }` → tire la roulette, renvoie le multiplicateur |
-| `DELETE` | `/api/leaderboard`  | Remise à zéro (borne uniquement, avec sauvegarde)    |
+| `DELETE` | `/api/leaderboard`  | Remise à zéro (borne uniquement, ou jeton `x-admin-token`) |
 
 Réinitialiser le classement entre deux événements :
 
 ```bash
 npm run reset
 ```
+
+Sur une instance **en ligne**, ce reset est refusé tant qu'aucun jeton n'est
+défini. Ajoute une variable d'environnement `ADMIN_TOKEN` sur l'hébergeur, puis :
+
+```bash
+curl -X DELETE https://ton-app.onrender.com/api/leaderboard -H "x-admin-token: TON_JETON"
+```
+
+> Derrière un proxy d'hébergeur, `req.ip` vaut l'adresse du proxy (127.0.0.1) :
+> un contrôle « est-ce localhost ? » laisserait donc **tout internet** effacer
+> le classement. D'où le jeton.
+
+L'enregistrement des scores est par ailleurs limité à 20 requêtes par minute et
+par IP, pour éviter qu'on noie le classement depuis l'URL publique.
 
 L'ancien classement est archivé dans `leaderboard.backup-<timestamp>.json`.
 

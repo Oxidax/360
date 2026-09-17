@@ -110,11 +110,53 @@ function rank(list) {
   );
 }
 
-/** Autorise les actions destructives uniquement depuis la machine locale. */
-function localOnly(req, res, next) {
+/**
+ * Protège les actions destructives.
+ *
+ * Attention au piège : derrière un proxy d'hébergeur, `req.ip` vaut l'adresse
+ * du proxy — soit 127.0.0.1. Un simple contrôle « est-ce localhost ? » laisse
+ * donc la porte grande ouverte à tout internet une fois l'app déployée.
+ *
+ *   - ADMIN_TOKEN défini  → il faut l'en-tête `x-admin-token` (cas hébergé)
+ *   - sinon               → uniquement depuis la borne, en connexion directe
+ */
+function adminOnly(req, res, next) {
+  const token = process.env.ADMIN_TOKEN;
+  if (token) {
+    if (req.get('x-admin-token') === token) return next();
+    return res.status(403).json({ error: 'Jeton administrateur invalide.' });
+  }
+  // La présence d'un en-tête de proxy prouve qu'on n'est pas en direct :
+  // sans jeton configuré, on refuse plutôt que de faire confiance à req.ip.
+  if (req.get('x-forwarded-for')) {
+    return res.status(403).json({
+      error: "Instance en ligne : définis ADMIN_TOKEN pour autoriser cette action.",
+    });
+  }
   const ip = req.ip || '';
   if (ip === '::1' || ip === '127.0.0.1' || ip === '::ffff:127.0.0.1') return next();
   return res.status(403).json({ error: 'Action autorisée uniquement depuis la borne.' });
+}
+
+/**
+ * Garde-fou anti-spam sur l'enregistrement des scores : sur une URL publique,
+ * rien n'empêche de marteler l'API pour noyer le classement.
+ */
+const RATE = { windowMs: 60_000, max: 20, hits: new Map() };
+function rateLimit(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || 'inconnu';
+  const fresh = (RATE.hits.get(key) || []).filter((t) => now - t < RATE.windowMs);
+  if (fresh.length >= RATE.max) {
+    return res.status(429).json({ error: 'Trop de requêtes, réessaie dans une minute.' });
+  }
+  fresh.push(now);
+  RATE.hits.set(key, fresh);
+  // Purge occasionnelle pour ne pas faire grossir la Map indéfiniment.
+  if (RATE.hits.size > 500) {
+    for (const [k, v] of RATE.hits) if (!v.some((t) => now - t < RATE.windowMs)) RATE.hits.delete(k);
+  }
+  next();
 }
 
 /* ------------------------------------------------------------------ */
@@ -122,6 +164,9 @@ function localOnly(req, res, next) {
 /* ------------------------------------------------------------------ */
 
 const app = express();
+// Un seul saut de proxy (celui de l'hébergeur) : `req.ip` devient la vraie
+// adresse du visiteur, ce qui rend le quota par IP effectif.
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '16kb' }));
 
 // Pas de cache sur le HTML/JS : tes modifs sont prises en compte au simple refresh.
@@ -167,7 +212,7 @@ app.get('/api/leaderboard', (req, res) => {
 });
 
 // Enregistrement d'un score
-app.post('/api/score', async (req, res) => {
+app.post('/api/score', rateLimit, async (req, res) => {
   const name = sanitizeName(req.body?.name);
   const spins = Number(req.body?.spins);
   const durationMs = Number(req.body?.durationMs);
@@ -207,7 +252,7 @@ app.post('/api/score', async (req, res) => {
 // Roulette : le joueur mise son score. Le tirage est fait ICI, jamais dans le
 // navigateur — sinon n'importe qui peut forcer le résultat depuis la console,
 // ou relancer le tirage en rechargeant la page jusqu'au ×10.
-app.post('/api/gamble', async (req, res) => {
+app.post('/api/gamble', rateLimit, async (req, res) => {
   const id = String(req.body?.id ?? '');
   const entry = scores.find((s) => s.id === id);
 
@@ -244,7 +289,7 @@ app.post('/api/gamble', async (req, res) => {
 });
 
 // Remise à zéro entre deux événements (depuis la borne uniquement)
-app.delete('/api/leaderboard', localOnly, async (req, res) => {
+app.delete('/api/leaderboard', adminOnly, async (req, res) => {
   let backupName = null;
   if (scores.length) {
     backupName = `leaderboard.backup-${Date.now()}.json`;
