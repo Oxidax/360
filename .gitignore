@@ -1,0 +1,9 @@
+node_modules/
+
+# Base de scores : locale à chaque installation, jamais versionnée
+# (elle contient des pseudos, et le serveur la recrée vide si absente).
+leaderboard.json
+leaderboard.backup-*.json
+
+*.tmp
+.DS_Store

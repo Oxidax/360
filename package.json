@@ -1,0 +1,20 @@
+{
+  "name": "spin-challenge",
+  "version": "1.0.0",
+  "description": "Borne evenementielle : compte les tours a 360 degres faits devant une webcam (MediaPipe Pose).",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "reset": "curl -X DELETE http://localhost:3000/api/leaderboard",
+    "test": "node test/spin.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.14",
+    "express": "^4.19.2"
+  }
+}

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Spin Challenge — Combien de tours en 15 secondes ?</title>
+
+<!-- Tailwind (CDN). Si le CDN est injoignable, le bloc <style> ci-dessous
+     garantit une mise en page utilisable malgré tout. -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+  :root{
+    --bg:#080b18; --panel:#111730; --panel-2:#0d1226;
+    --accent:#22d3ee; --accent-2:#a855f7; --ok:#34d399; --warn:#fbbf24; --bad:#f87171;
+    --txt:#eef2ff; --muted:#94a3b8; --line:rgba(148,163,184,.18);
+  }
+  *{box-sizing:border-box}
+  /* L'attribut `hidden` doit gagner contre les utilitaires Tailwind
+     (`flex`, `grid`…) qui imposent un display et l'annuleraient sinon. */
+  [hidden]{display:none !important}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--txt);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden; -webkit-font-smoothing:antialiased;
+    user-select:none; -webkit-user-select:none;
+  }
+  /* Fond animé discret */
+  body::before{
+    content:""; position:fixed; inset:-30%; z-index:-1; pointer-events:none;
+    background:
+      radial-gradient(45% 45% at 20% 20%, rgba(34,211,238,.16), transparent 60%),
+      radial-gradient(45% 45% at 80% 75%, rgba(168,85,247,.16), transparent 60%);
+    animation:drift 22s ease-in-out infinite alternate;
+  }
+  @keyframes drift{from{transform:translate3d(-3%,-2%,0) scale(1)}to{transform:translate3d(3%,2%,0) scale(1.08)}}
+
+  /* --- Gestion des écrans (SPA) --- */
+  .screen{display:none; height:100dvh; width:100%; padding:clamp(12px,2.2vh,28px); }
+  .screen.active{display:flex; flex-direction:column; align-items:center; justify-content:center; animation:fade .35s ease both}
+  @keyframes fade{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
+
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--line); border-radius:24px;
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.85);
+  }
+  .btn{
+    border:0; cursor:pointer; border-radius:9999px; font-weight:800; letter-spacing:.01em;
+    transition:transform .12s ease, filter .2s ease, box-shadow .2s ease;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+  .btn-primary{
+    background:linear-gradient(100deg,var(--accent),var(--accent-2)); color:#06101f;
+    box-shadow:0 16px 40px -14px rgba(34,211,238,.8);
+  }
+  .btn-primary:hover:not(:disabled){filter:brightness(1.08)}
+  .btn-ghost{background:rgba(255,255,255,.07); color:var(--txt); border:1px solid var(--line)}
+  .btn-ghost:hover{background:rgba(255,255,255,.13)}
+
+  input[type=text]{
+    background:rgba(2,6,23,.75); border:2px solid var(--line); color:var(--txt);
+    border-radius:16px; outline:0; width:100%;
+  }
+  input[type=text]:focus{border-color:var(--accent); box-shadow:0 0 0 4px rgba(34,211,238,.16)}
+
+  /* --- Écran jeu --- */
+  #stage{
+    position:relative; width:min(100%,1100px); aspect-ratio:4/3; max-height:76dvh;
+    margin-inline:auto; border-radius:28px; overflow:hidden;
+    background:#000; border:1px solid var(--line);
+    box-shadow:0 40px 100px -40px rgba(0,0,0,.9);
+  }
+  #cam,#overlay{position:absolute; inset:0; width:100%; height:100%;}
+  #cam{object-fit:cover; transform:scaleX(-1)}      /* effet miroir, plus naturel */
+  #overlay{transform:scaleX(-1); pointer-events:none}
+  .hud{position:absolute; inset:0; pointer-events:none}
+  .hud > *{pointer-events:auto}
+
+  .chip{
+    background:rgba(8,11,24,.72); backdrop-filter:blur(12px);
+    border:1px solid var(--line); border-radius:18px;
+  }
+
+  #spinCount{
+    font-variant-numeric:tabular-nums; line-height:.9;
+    text-shadow:0 0 40px rgba(34,211,238,.55);
+  }
+  #spinCount.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pop{0%{transform:scale(1)}35%{transform:scale(1.35); color:var(--accent)}100%{transform:scale(1)}}
+
+  /* Anneau de progression du tour en cours */
+  .ring{transform:rotate(-90deg)}
+  .ring circle{fill:none; stroke-linecap:round}
+
+  #flash{position:absolute; inset:0; background:var(--accent); opacity:0; pointer-events:none}
+  #flash.on{animation:flash .5s ease-out}
+  @keyframes flash{0%{opacity:.34}100%{opacity:0}}
+
+  #countdown{
+    position:absolute; inset:0; display:grid; place-items:center;
+    background:rgba(4,7,18,.78); backdrop-filter:blur(8px); z-index:20; text-align:center;
+  }
+  #countdownNum{font-size:clamp(80px,18vw,200px); font-weight:900; line-height:1;
+    background:linear-gradient(100deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:tick .9s ease-out}
+  @keyframes tick{from{transform:scale(1.5); opacity:0}to{transform:scale(1); opacity:1}}
+  /* Les emoji ne supportent pas background-clip:text (ils deviennent des
+     pastilles dégradées illisibles) : on repasse en couleur pleine. */
+  #countdownNum.plain{
+    background:none; color:var(--txt); -webkit-text-fill-color:currentColor;
+    font-size:clamp(64px,12vw,140px);
+  }
+
+  /* Barre de temps */
+  #timeBar{height:100%; width:100%; background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    transform-origin:left center; transition:transform .12s linear}
+  #timeBar.low{background:linear-gradient(90deg,#f59e0b,var(--bad))}
+
+  /* Tableau */
+  table{border-collapse:collapse; width:100%}
+  tbody tr{border-top:1px solid var(--line)}
+  tbody tr.me{background:linear-gradient(90deg,rgba(34,211,238,.16),rgba(168,85,247,.10))}
+
+  #debug{
+    position:absolute; left:12px; bottom:12px; z-index:30; display:none;
+    font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre;
+    background:rgba(2,6,23,.88); color:#a5f3fc; padding:10px 12px; border-radius:12px;
+    border:1px solid var(--line);
+  }
+  #debug.on{display:block}
+
+  /* --- Écran roulette --- */
+  #gambleCard{position:relative; overflow:hidden}
+  #gambleCard.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes shake{
+    10%,90%{transform:translate3d(-3px,0,0)} 20%,80%{transform:translate3d(6px,0,0)}
+    30%,50%,70%{transform:translate3d(-11px,0,0)} 40%,60%{transform:translate3d(11px,0,0)}
+  }
+  #confetti{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:5}
+
+  #wheelWrap{position:relative; width:min(54vh,400px); aspect-ratio:1; margin:14px auto}
+  #wheel{width:100%; height:100%; display:block;
+    filter:drop-shadow(0 22px 55px rgba(0,0,0,.65))}
+  #wheelGroup text{font-weight:900; font-family:inherit; paint-order:stroke;
+    stroke:rgba(0,0,0,.55); stroke-width:3px; stroke-linejoin:round}
+  /* Le pointeur encaisse chaque passage de case */
+  #pointer{
+    position:absolute; top:-10px; left:50%; margin-left:-15px; z-index:4;
+    width:0; height:0; border-left:15px solid transparent; border-right:15px solid transparent;
+    border-top:32px solid #f8fafc; transform-origin:50% 0;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.8));
+  }
+  #pointer.knock{animation:knock .09s ease-out}
+  @keyframes knock{50%{transform:rotate(-9deg)}}
+  #wheelHub{
+    position:absolute; inset:34%; border-radius:50%; z-index:3; display:grid; place-items:center;
+    background:radial-gradient(circle at 35% 30%,#1e293b,#020617);
+    border:3px solid rgba(148,163,184,.3); box-shadow:0 10px 30px rgba(0,0,0,.7), inset 0 2px 10px rgba(255,255,255,.08);
+    font-size:clamp(20px,4.2vh,34px); font-weight:900; line-height:1; text-align:center;
+  }
+  #wheelHub.win{animation:hubPop .6s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes hubPop{35%{transform:scale(1.22)}}
+
+  #gambleResult{min-height:clamp(70px,11vh,104px); display:grid; place-items:center}
+  #gambleVerdict{font-size:clamp(34px,7.5vh,68px); font-weight:900; line-height:1}
+  #gambleVerdict.in{animation:verdict .55s cubic-bezier(.2,1.7,.4,1)}
+  @keyframes verdict{from{transform:scale(.3) rotate(-12deg); opacity:0}to{transform:none; opacity:1}}
+  #gambleDetail{font-size:clamp(13px,2vh,17px); font-weight:700; color:var(--muted); margin-top:6px}
+
+  .btn-danger{background:linear-gradient(100deg,#f43f5e,#f59e0b); color:#180406;
+    box-shadow:0 16px 40px -14px rgba(244,63,94,.85)}
+  .btn-danger:hover:not(:disabled){filter:brightness(1.1)}
+  .btn-pulse{animation:pulse 1.5s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.035)}}
+
+  .spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.15);
+    border-top-color:var(--accent); animation:rot 1s linear infinite; margin:0 auto}
+  @keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+
+<body>
+
+<!-- ============================================================= -->
+<!-- ÉCRAN 1 — ACCUEIL                                             -->
+<!-- ============================================================= -->
+<section id="screen-home" class="screen active">
+  <div class="card w-full max-w-xl p-8 sm:p-12 text-center">
+    <div class="text-6xl sm:text-7xl mb-4" aria-hidden="true">🌀</div>
+
+    <h1 class="text-4xl sm:text-5xl font-black tracking-tight mb-3">
+      SPIN&nbsp;CHALLENGE
+    </h1>
+    <p class="text-slate-400 mb-8 text-base sm:text-lg">
+      Fais un maximum de tours sur toi-même en
+      <span id="homeDuration" class="font-bold text-cyan-300">15 secondes</span>.
+      <br class="hidden sm:block" />
+      Place-toi bien en face de la caméra, en pied.
+    </p>
+
+    <form id="homeForm" autocomplete="off" novalidate>
+      <label for="pseudo" class="block text-left text-sm font-semibold text-slate-300 mb-2">
+        Ton pseudo
+      </label>
+      <input id="pseudo" type="text" maxlength="20" placeholder="Ex. : Léa"
+             class="px-5 py-4 text-xl font-semibold mb-2" inputmode="text" />
+      <p id="homeError" class="text-left text-sm text-rose-400 h-5 mb-3"></p>
+
+      <button id="btnStart" type="submit" class="btn btn-primary w-full py-5 text-xl sm:text-2xl">
+        Commencer le défi →
+      </button>
+    </form>
+
+    <button id="btnSeeBoard" type="button" class="btn btn-ghost mt-4 px-6 py-3 text-sm">
+      Voir le classement
+    </button>
+
+    <p id="engineStatus" class="mt-6 text-xs text-slate-500">Initialisation du moteur de détection…</p>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- ÉCRAN 2 — CAMÉRA / JEU                                        -->
+<!-- ============================================================= -->
+<section id="screen-game" class="screen">
+  <div id="stage">
+    <video id="cam" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div id="flash"></div>
+
+    <!-- HUD -->
+    <div class="hud">
+      <!-- Compteur de tours -->
+      <div class="chip absolute left-4 top-4 px-5 py-3 sm:px-7 sm:py-4 flex items-center gap-4">
+        <div class="relative grid place-items-center" style="width:56px;height:56px">
+          <svg class="ring absolute inset-0" width="56" height="56" viewBox="0 0 56 56">
+            <circle cx="28" cy="28" r="24" stroke="rgba(148,163,184,.25)" stroke-width="5"></circle>
+            <circle id="ringProgress" cx="28" cy="28" r="24" stroke="url(#g1)" stroke-width="5"
+                    stroke-dasharray="150.8" stroke-dashoffset="150.8"></circle>
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#22d3ee"/><stop offset="100%" stop-color="#a855f7"/>
+              </linearGradient>
+            </defs>
+          </svg>
+          <span class="text-xs font-bold text-slate-300">tour</span>
+        </div>
+        <div class="text-left">
+          <div id="spinCount" class="text-5xl sm:text-6xl font-black">0</div>
+          <div class="text-[11px] uppercase tracking-[.18em] text-slate-400 font-bold">Tours</div>
+        </div>
+      </div>
+
+      <!-- Chrono -->
+      <div class="chip absolute right-4 top-4 px-5 py-3 sm:px-7 sm:py-4 text-right">
+        <div id="timeLeft" class="text-4xl sm:text-5xl font-black tabular-nums">30.0</div>
+        <div class="text-[11px] uppercase tracking-[.18em] text-slate-400 font-bold">Secondes</div>
+      </div>
+
+      <!-- Barre de temps -->
+      <div class="absolute left-0 right-0 top-0 h-1.5 bg-black/40">
+        <div id="timeBar"></div>
+      </div>
+
+      <!-- Message d'état (pose perdue, consignes…) -->
+      <div id="hint" class="chip absolute left-1/2 -translate-x-1/2 bottom-24 px-6 py-3
+                            text-sm sm:text-base font-semibold text-amber-300 opacity-0 transition-opacity">
+      </div>
+
+      <!-- Bouton terminer -->
+      <button id="btnStop" type="button"
+              class="btn btn-ghost absolute left-1/2 -translate-x-1/2 bottom-5 px-10 py-4 text-lg font-bold">
+        Terminer
+      </button>
+    </div>
+
+    <!-- Décompte de départ -->
+    <div id="countdown">
+      <div>
+        <div id="countdownNum">3</div>
+        <p id="countdownMsg" class="mt-3 text-lg sm:text-xl font-semibold text-slate-200">
+          Place-toi face à la caméra…
+        </p>
+      </div>
+    </div>
+
+    <div id="debug"></div>
+  </div>
+
+  <p class="mt-3 text-xs text-slate-500">Astuce : appuie sur <kbd>D</kbd> pour le mode debug · <kbd>Échap</kbd> pour abandonner</p>
+</section>
+
+<!-- ============================================================= -->
+<!-- ÉCRAN 3 — ROULETTE (mise du score)                            -->
+<!-- ============================================================= -->
+<section id="screen-gamble" class="screen">
+  <div id="gambleCard" class="card w-full max-w-2xl p-5 sm:p-8 text-center">
+    <canvas id="confetti"></canvas>
+
+    <p class="uppercase tracking-[.22em] text-[11px] font-black text-slate-500">Manche terminée</p>
+    <p class="mt-1 text-lg font-bold"><span id="gambleName" class="text-cyan-300"></span></p>
+
+    <p class="mt-1">
+      <span id="gambleScore" class="text-6xl sm:text-7xl font-black tabular-nums">0</span>
+      <span class="text-xl font-bold text-slate-400 ml-2">tours</span>
+    </p>
+
+    <div id="wheelWrap">
+      <div id="pointer"></div>
+      <svg id="wheel" viewBox="0 0 400 400" aria-hidden="true">
+        <g id="wheelGroup"></g>
+      </svg>
+      <div id="wheelHub"><span id="hubText">🎲</span></div>
+    </div>
+
+    <div id="gambleResult">
+      <div>
+        <div id="gambleVerdict"></div>
+        <div id="gambleDetail"></div>
+      </div>
+    </div>
+
+    <div id="gambleActions" class="flex flex-col sm:flex-row gap-3 mt-3">
+      <button id="btnBank" type="button" class="btn btn-ghost flex-1 py-4 text-base sm:text-lg">
+        🔒 Encaisser <span id="bankAmount"></span>
+      </button>
+      <button id="btnGamble" type="button" class="btn btn-danger btn-pulse flex-1 py-4 text-base sm:text-lg">
+        🎰 Tout miser à la roulette
+      </button>
+    </div>
+
+    <button id="btnAfterGamble" type="button"
+            class="btn btn-primary w-full py-4 text-lg mt-3" hidden>
+      Voir le classement →
+    </button>
+  </div>
+</section>
+
+<!-- ============================================================= -->
+<!-- ÉCRAN 4 — CLASSEMENT                                          -->
+<!-- ============================================================= -->
+<section id="screen-board" class="screen">
+  <div class="card w-full max-w-2xl p-6 sm:p-10 flex flex-col" style="max-height:92dvh">
+
+    <div id="resultBanner" class="hidden text-center mb-6 pb-6" style="border-bottom:1px solid var(--line)">
+      <p class="text-slate-400 text-sm uppercase tracking-[.2em] font-bold mb-1">Résultat</p>
+      <p class="text-2xl sm:text-3xl font-bold"><span id="resultName" class="text-cyan-300"></span></p>
+      <p class="mt-2">
+        <span id="resultSpins" class="text-7xl sm:text-8xl font-black tabular-nums">0</span>
+        <span id="resultUnit" class="text-2xl font-bold text-slate-400 ml-2">tours</span>
+      </p>
+      <p id="resultRank" class="mt-3 text-lg font-semibold text-amber-300"></p>
+    </div>
+
+    <h2 class="text-2xl sm:text-3xl font-black mb-4 flex items-center gap-3">
+      🏆 <span>Classement</span>
+      <span id="boardTotal" class="ml-auto text-xs font-semibold text-slate-500"></span>
+    </h2>
+
+    <div class="overflow-y-auto -mx-2 px-2" style="min-height:120px">
+      <table>
+        <thead>
+          <tr class="text-left text-[11px] uppercase tracking-[.16em] text-slate-500">
+            <th class="py-2 w-14">#</th>
+            <th class="py-2">Joueur</th>
+            <th class="py-2 text-right w-24">Score</th>
+          </tr>
+        </thead>
+        <tbody id="boardBody">
+          <tr><td colspan="3" class="py-10 text-center text-slate-500">Chargement…</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <button id="btnNewPlayer" type="button" class="btn btn-primary w-full py-5 text-xl mt-6">
+      Nouveau joueur
+    </button>
+  </div>
+</section>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

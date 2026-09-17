@@ -1,0 +1,14 @@
+# Déploiement sur Render (https://render.com) — offre gratuite.
+# Render lit ce fichier automatiquement : « New + » → « Blueprint » → ce dépôt.
+services:
+  - type: web
+    name: spin-challenge
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: ROUND_MS
+        value: "15000"
+      - key: COUNTDOWN
+        value: "5"
