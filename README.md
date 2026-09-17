@@ -59,6 +59,7 @@ de faux positifs. **À relancer après chaque changement de réglage** dans
 ```
 V1/
 ├── server.js              # Express : statique + API classement
+├── render.yaml            # déploiement en ligne (§9)
 ├── leaderboard.json       # base de données (créée automatiquement)
 ├── package.json
 ├── test/
@@ -361,7 +362,73 @@ journalctl -u spin-challenge -f     # logs et scores en direct
 > Cette procédure Ubuntu n'a pas pu être testée depuis le Mac de développement.
 > Vérifie-la sur la borne **avant** le jour J, en particulier l'accès webcam.
 
-## 8. Dépannage
+---
+
+## 8. Mettre en ligne (URL publique, utilisable sur n'importe quel appareil)
+
+### Pourquoi GitHub Pages ne suffit pas
+
+GitHub Pages ne sert que des fichiers statiques. Cette application a un
+**serveur Node** (API classement + tirage de la roulette). Il faut donc un
+hébergeur capable d'exécuter `server.js`.
+
+Et surtout : **la webcam exige du HTTPS**. `getUserMedia()` est refusé en HTTP
+ailleurs que sur `localhost`. Un hébergeur qui fournit un certificat (c'est le
+cas de tous ceux ci-dessous) règle le problème.
+
+### 1. Pousser sur GitHub
+
+Crée un dépôt vide sur <https://github.com/new> (sans README ni .gitignore),
+puis :
+
+```bash
+git remote add origin https://github.com/TON_PSEUDO/spin-challenge.git
+git branch -M main
+git push -u origin main
+```
+
+### 2. Déployer sur Render (gratuit)
+
+1. <https://render.com> → connexion avec GitHub
+2. **New +** → **Blueprint** → choisis ce dépôt
+3. Render lit `render.yaml` et déploie tout seul
+
+Tu obtiens une URL du type `https://spin-challenge.onrender.com`, utilisable
+depuis n'importe quel téléphone ou ordinateur.
+
+Les autres hébergeurs Node marchent aussi (Railway, Fly.io, Koyeb…). En
+revanche **Vercel et Netlify ne conviennent pas** : leur système de fichiers
+est en lecture seule, `leaderboard.json` ne pourrait pas être écrit.
+
+### Les limites de l'offre gratuite
+
+| Limite | Conséquence |
+| ------ | ----------- |
+| **Mise en veille après 15 min d'inactivité** | Le premier visiteur attend ~1 min que le serveur se réveille |
+| **Disque éphémère** | `leaderboard.json` est remis à zéro à chaque redéploiement ou redémarrage |
+| **CPU partagé** | La détection tourne dans le navigateur du visiteur, donc ça ne change rien aux perfs de jeu |
+
+Le classement qui s'efface est le vrai point à connaître : **pour l'événement,
+garde la version locale** (`npm start` sur la borne), où les scores sont
+réellement persistants. La version en ligne est parfaite pour tester, montrer
+et partager.
+
+### Sur téléphone : ce qui marche et ce qui coince
+
+La détection fonctionne, mais l'algorithme a besoin de voir les **épaules et
+les hanches**. Téléphone tenu à bout de bras, on ne voit que le visage et les
+tours ne seront pas comptés.
+
+Il faut **caler le téléphone** (contre un objet, sur une table) et reculer de
+2 mètres environ. Dans ces conditions ça marche — mais l'expérience reste
+pensée pour une borne en écran large.
+
+> Le comportement exact sur iOS Safari et sur les téléphones anciens n'a pas
+> été testé : MediaPipe demande WebAssembly + WebGL, disponibles sur les
+> navigateurs récents mais parfois lents sur du matériel âgé.
+
+
+## 9. Dépannage
 
 | Symptôme                                   | Cause / solution                                                            |
 | ------------------------------------------ | --------------------------------------------------------------------------- |
