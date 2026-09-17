@@ -1,9 +1,14 @@
 # 🌀 Spin Challenge
 
-Borne événementielle locale : une personne se place devant la webcam et fait
-un maximum de **tours complets à 360°** sur elle-même en 15 secondes.
-L'application compte les tours automatiquement, propose de **miser son score à
-la roulette**, et tient un classement.
+Dispositif événementiel en **deux écrans** : une personne se place devant la
+webcam et fait un maximum de **tours complets à 360°** sur elle-même en
+15 secondes, puis peut **miser son score à la roulette**. Le classement
+s'affiche en temps réel sur un mur d'écrans.
+
+| URL | Écran | Rôle |
+| --- | ----- | ---- |
+| `/` | la **borne** | pseudo → webcam → roulette → score du joueur |
+| `/board` | le **mur** | classement géant, mis à jour en direct |
 
 Tout tourne **en local** : la détection de pose s'exécute dans le navigateur,
 les scores sont stockés dans un simple fichier JSON. Aucune image ne quitte la
@@ -27,7 +32,14 @@ C'est tout : le modèle de détection (`public/models/pose_landmarker_lite.task`
 npm start
 ```
 
-Puis ouvre **http://localhost:3000** dans Chrome.
+Puis, dans Chrome :
+
+- **http://localhost:3000** sur la borne (celle qui a la webcam)
+- **http://localhost:3000/board** sur le mur d'écrans
+
+Les deux pages peuvent tourner sur la même machine (deux fenêtres) ou sur deux
+machines du même réseau — dans ce dernier cas, seule la borne doit être sur
+`localhost`, le mur peut pointer vers l'IP réseau.
 
 > ⚠️ La webcam n'est accessible qu'en contexte sécurisé. `http://localhost`
 > en fait partie — mais **pas** `http://192.168.x.x`. Pour utiliser la borne,
@@ -65,8 +77,10 @@ V1/
 ├── test/
 │   └── spin.test.mjs      # banc d'essai de l'algorithme (npm test)
 └── public/
-    ├── index.html         # les 4 écrans (SPA) + styles
+    ├── index.html         # BORNE : accueil, jeu, roulette, résultat
     ├── app.js             # MediaPipe, comptage, roulette, chrono, API
+    ├── board.html         # MUR : classement géant
+    ├── board.js           # mise en page adaptative + flux temps réel
     └── models/
         └── pose_landmarker_lite.task
 ```
@@ -77,6 +91,7 @@ V1/
 | -------- | ------------------- | ---------------------------------------------------- |
 | `GET`    | `/api/config`       | Durée de manche et décompte (lus par le front)       |
 | `GET`    | `/api/leaderboard`  | Top N (`?limit=10`)                                  |
+| `GET`    | `/api/stream`       | Flux SSE : pousse le classement à chaque changement  |
 | `POST`   | `/api/score`        | `{ name, spins, durationMs }` → renvoie le rang      |
 | `POST`   | `/api/gamble`       | `{ id }` → tire la roulette, renvoie le multiplicateur |
 | `DELETE` | `/api/leaderboard`  | Remise à zéro (borne uniquement, ou jeton `x-admin-token`) |
@@ -165,6 +180,48 @@ http://localhost:3000/?demo=9
 
 Va directement à l'écran roulette avec 9 tours en poche. Pratique pour régler
 l'animation ou faire une démo.
+
+---
+
+## 4 ter. Le mur d'écrans (`/board`)
+
+Conçu pour **5 écrans empilés formant un 1000 × 5000 px** (ratio 1:5), mais
+entièrement proportionnel : la page reste juste sur un laptop comme sur le mur.
+
+### Mise à jour en temps réel
+
+Le mur ne sonde pas le serveur : il ouvre un flux **SSE** (`/api/stream`) et
+reçoit le classement **à l'instant** où une manche se termine. Le public voit
+la ligne apparaître pendant que le joueur est encore devant la borne.
+
+Si le flux tombe, la page bascule automatiquement sur un sondage toutes les
+4 secondes et tente de se reconnecter — le témoin en bas de page indique l'état
+(vert « En direct », rouge « Reconnexion… »).
+
+### Mise en page adaptative
+
+Le nombre de lignes et leur taille dépendent de **la hauteur disponible et du
+nombre de joueurs** :
+
+| Écran | Lignes affichées | Hauteur de ligne |
+| ----- | ---------------- | ---------------- |
+| Mur 1000 × 5000 | jusqu'à 25 | ~300 px |
+| 1440 × 900 (laptop) | 3-4 | ~300 px |
+
+Avec peu de joueurs, les lignes **grandissent pour remplir l'écran** plutôt que
+de laisser le mur aux trois quarts vide.
+
+Deux variables pilotent tout : `--row` (hauteur d'une ligne) et `--u` (unité
+typographique). Elles sont distinctes parce que le mur est très haut et très
+étroit : caler les polices sur la hauteur des lignes écrasait la colonne du
+pseudo à zéro. `--u` est bornée par la largeur *et* la hauteur.
+
+### Animations
+
+- les lignes **glissent** vers leur nouvelle position quand le classement change
+  (on voit un joueur en doubler un autre)
+- la manche qui vient de se terminer **clignote**, en doré pour un ×5 ou ×10
+- podium doré / argent / bronze
 
 ---
 

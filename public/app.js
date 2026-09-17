@@ -63,6 +63,7 @@ const CONFIG = {
   wheelTickMinMs: 38,   // anti-mitraillette sur les clics du début
 
   /* --- Divers --- */
+  resultAutoBackS: 20,   // retour auto à l'écran pseudo, pour la file d'attente
   hintDelayMs: 700,
   apiTimeoutMs: 5000,
 };
@@ -310,14 +311,13 @@ const el = {
     home: $('#screen-home'),
     game: $('#screen-game'),
     gamble: $('#screen-gamble'),
-    board: $('#screen-board'),
+    result: $('#screen-result'),
   },
   // accueil
   homeForm: $('#homeForm'),
   pseudo: $('#pseudo'),
   homeError: $('#homeError'),
   btnStart: $('#btnStart'),
-  btnSeeBoard: $('#btnSeeBoard'),
   engineStatus: $('#engineStatus'),
   homeDuration: $('#homeDuration'),
   // jeu
@@ -350,15 +350,13 @@ const el = {
   hubText: $('#hubText'),
   pointer: $('#pointer'),
   confetti: $('#confetti'),
-  // classement
-  boardBody: $('#boardBody'),
-  boardTotal: $('#boardTotal'),
-  resultBanner: $('#resultBanner'),
+  // résultat
   resultName: $('#resultName'),
   resultSpins: $('#resultSpins'),
   resultUnit: $('#resultUnit'),
   resultRank: $('#resultRank'),
   btnNewPlayer: $('#btnNewPlayer'),
+  autoBack: $('#autoBack'),
 };
 
 const ctx = el.overlay.getContext('2d');
@@ -768,8 +766,8 @@ function backToHome() {
   state.phase = 'home';
   cancelAnimationFrame(state.rafId);
   clearTimeout(state.endTimer);
+  stopAutoReturn();
   setCountdownOverlay(false);
-  el.resultBanner.classList.add('hidden');
   showScreen('home');
   el.pseudo.value = '';
   el.homeError.textContent = '';
@@ -1049,18 +1047,51 @@ function revealOutcome(data) {
   el.btnAfterGamble.hidden = false;
 }
 
-function boardFromPending(data) {
-  el.resultBanner.classList.remove('hidden');
-  el.resultName.textContent = pending.name;
-  el.resultSpins.textContent = data.score ?? pending.spins;
+/**
+ * Écran de fin : uniquement le score du joueur. Le classement complet vit
+ * sur le mur d'écrans (/board), pas sur la borne — le joueur suivant ne doit
+ * pas avoir à faire défiler un tableau pour commencer.
+ */
+function showResult(data) {
+  const score = data.score ?? pending.spins;
   const mult = data.multiplier;
-  // Après un pari le total n'est plus un nombre de tours mais un score.
-  el.resultUnit.textContent = mult == null ? (pending.spins > 1 ? 'tours' : 'tour') : 'points';
-  el.resultRank.textContent =
-    (data.rank === 1 ? '🥇 Meilleur score !' : `${data.rank}ᵉ place sur ${data.total} joueur${data.total > 1 ? 's' : ''}`) +
-    (mult != null ? `   ·   ${pending.spins} tours ×${mult}` : '');
-  renderBoard(data.top, data.total, pending.id);
-  showScreen('board');
+
+  el.resultName.textContent = pending.name;
+  el.resultSpins.textContent = score;
+  el.resultUnit.textContent = mult == null
+    ? (score > 1 ? 'tours' : 'tour')
+    : 'points';
+  el.resultRank.textContent = mult == null
+    ? `${pending.spins} tour${pending.spins > 1 ? 's' : ''} encaissé${pending.spins > 1 ? 's' : ''}`
+    : mult === 0
+      ? `Roulette perdue — ${pending.spins} tour${pending.spins > 1 ? 's' : ''} envolé${pending.spins > 1 ? 's' : ''}`
+      : `${pending.spins} tour${pending.spins > 1 ? 's' : ''} × ${mult}`;
+
+  showScreen('result');
+  startAutoReturn();
+}
+
+/**
+ * File d'attente oblige : la borne revient d'elle-même à l'écran pseudo si
+ * personne ne clique, sinon elle reste bloquée sur le score du précédent.
+ */
+let autoReturnTimer = 0;
+function startAutoReturn() {
+  clearInterval(autoReturnTimer);
+  let left = CONFIG.resultAutoBackS;
+  const tick = () => {
+    el.autoBack.textContent = `Retour automatique dans ${left} s…`;
+    if (left-- <= 0) {
+      clearInterval(autoReturnTimer);
+      backToHome();
+    }
+  };
+  tick();
+  autoReturnTimer = setInterval(tick, 1000);
+}
+function stopAutoReturn() {
+  clearInterval(autoReturnTimer);
+  el.autoBack.textContent = '';
 }
 
 /* ------------------------------------------------------------------ */
@@ -1085,14 +1116,11 @@ async function api(path, options = {}) {
 }
 
 async function submitScore(name, spins, durationMs) {
-  el.resultBanner.classList.remove('hidden');
+  pending = { id: null, name, spins, top: [], total: 0 };
   el.resultName.textContent = name;
   el.resultSpins.textContent = spins;
   el.resultUnit.textContent = spins > 1 ? 'tours' : 'tour';
   el.resultRank.textContent = 'Enregistrement…';
-  el.boardBody.innerHTML =
-    '<tr><td colspan="3" class="py-10 text-center"><div class="spinner"></div></td></tr>';
-  showScreen('board');
 
   let data;
   try {
@@ -1102,66 +1130,26 @@ async function submitScore(name, spins, durationMs) {
     });
   } catch (err) {
     console.error(err);
+    // Le serveur est tombé : on montre quand même le score au joueur plutôt
+    // que de lui afficher une erreur incompréhensible.
+    showScreen('result');
     el.resultRank.textContent = '⚠️ Score non enregistré (serveur injoignable)';
-    loadBoard();
+    startAutoReturn();
     return;
   }
 
-  // Le score est déjà encaissé côté serveur : même si le joueur s'en va
-  // maintenant, il garde ses tours. La roulette ne fait que le remplacer.
   if (spins > 0) {
     showGamble(data.entry, data.top, data.total);
     return;
   }
-
-  // Zéro tour : rien à miser, on va droit au classement.
-  el.resultRank.textContent =
-    `${data.rank}ᵉ place sur ${data.total} joueur${data.total > 1 ? 's' : ''}`;
-  renderBoard(data.top, data.total, data.entry.id);
-}
-
-async function loadBoard(highlightId = null) {
-  try {
-    const data = await api('/api/leaderboard?limit=10');
-    renderBoard(data.top, data.total, highlightId);
-  } catch (err) {
-    el.boardBody.innerHTML =
-      '<tr><td colspan="3" class="py-10 text-center text-rose-400">Classement indisponible</td></tr>';
-  }
+  // Zéro tour : rien à miser, on passe directement au résultat.
+  pending.id = data.entry.id;
+  showResult({ score: 0, multiplier: null });
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (m) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
-}
-
-const MEDALS = ['🥇', '🥈', '🥉'];
-
-function renderBoard(top, total, highlightId) {
-  el.boardTotal.textContent = total ? `${total} participation${total > 1 ? 's' : ''}` : '';
-
-  if (!top || !top.length) {
-    el.boardBody.innerHTML =
-      '<tr><td colspan="3" class="py-10 text-center text-slate-500">Personne n\'a encore joué. À toi l\'honneur&nbsp;!</td></tr>';
-    return;
-  }
-
-  el.boardBody.innerHTML = top.map((s) => {
-    const score = Number.isFinite(s.score) ? s.score : s.spins;
-    // On garde le détail « tours × multiplicateur » : le classement reste
-    // lisible et on voit qui a osé la roulette.
-    const detail = s.multiplier == null
-      ? ''
-      : `<span class="block text-[11px] font-bold ${s.multiplier === 0 ? 'text-rose-400' : 'text-amber-300'}">
-           ${s.spins} tour${s.spins > 1 ? 's' : ''} ×${s.multiplier}
-         </span>`;
-    return `
-    <tr class="${s.id === highlightId ? 'me' : ''}">
-      <td class="py-3 text-lg font-black text-slate-400 align-top">${MEDALS[s.rank - 1] || s.rank}</td>
-      <td class="py-3 font-bold text-lg truncate">${escapeHtml(s.name)}${detail}</td>
-      <td class="py-3 text-right text-2xl font-black tabular-nums text-cyan-300 align-top">${score}</td>
-    </tr>`;
-  }).join('');
 }
 
 /* ------------------------------------------------------------------ */
@@ -1181,14 +1169,6 @@ el.homeForm.addEventListener('submit', (e) => {
   startRound(name);
 });
 
-el.btnSeeBoard.addEventListener('click', () => {
-  el.resultBanner.classList.add('hidden');
-  el.boardBody.innerHTML =
-    '<tr><td colspan="3" class="py-10 text-center"><div class="spinner"></div></td></tr>';
-  showScreen('board');
-  loadBoard();
-});
-
 el.btnStop.addEventListener('click', () => {
   if (state.phase === 'playing') endRound('manual');
   else if (state.phase === 'countdown') endRound('abort');
@@ -1201,20 +1181,13 @@ el.btnGamble.addEventListener('click', playRoulette);
 el.btnBank.addEventListener('click', () => {
   if (!pending) return backToHome();
   tone({ freq: 880, ms: 110, type: 'sine', gain: 0.12 });
-  boardFromPending({ top: pending.top, total: pending.total, rank: rankOf(pending.top, pending.id), score: pending.spins, multiplier: null });
+  showResult({ score: pending.spins, multiplier: null });
 });
 
 el.btnAfterGamble.addEventListener('click', () => {
   if (!pending) return backToHome();
-  const r = pending.result;
-  boardFromPending(r || { top: pending.top, total: pending.total, rank: rankOf(pending.top, pending.id), score: pending.spins, multiplier: null });
+  showResult(pending.result || { score: pending.spins, multiplier: null });
 });
-
-/** Rang du joueur dans un top déjà trié (0 si hors du top affiché). */
-function rankOf(top, id) {
-  const row = (top || []).find((s) => s.id === id);
-  return row ? row.rank : (pending?.total ?? 0);
-}
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'd' || e.key === 'D') {

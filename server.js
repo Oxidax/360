@@ -177,7 +177,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Front-end
+// Les deux pages du dispositif :
+//   /        la borne  — pseudo, webcam, roulette
+//   /board   le mur    — classement géant, temps réel
+app.get('/board', (req, res) => res.sendFile(path.join(ROOT, 'public', 'board.html')));
+
 app.use(express.static(path.join(ROOT, 'public'), { extensions: ['html'] }));
 
 // Runtime MediaPipe servi depuis node_modules → aucune dépendance CDN au runtime.
@@ -188,6 +192,60 @@ app.use(
     maxAge: '7d',
   })
 );
+
+/* ------------------------------------------------------------------ */
+/*  Diffusion temps réel vers le grand écran (SSE)                     */
+/* ------------------------------------------------------------------ */
+
+// Le mur d'écrans doit réagir à l'instant où une manche se termine. Un
+// sondage toutes les N secondes introduirait un décalage visible par tout
+// le public ; Server-Sent Events pousse la mise à jour immédiatement.
+/** @type {Set<import('express').Response>} */
+const viewers = new Set();
+
+function boardPayload(limit = 20, highlight = null) {
+  const sorted = rank(scores);
+  return {
+    total: scores.length,
+    top: sorted.slice(0, limit).map((s, i) => ({ ...s, rank: i + 1 })),
+    highlight,
+    at: Date.now(),
+  };
+}
+
+function broadcast(highlight = null) {
+  if (!viewers.size) return;
+  const frame = `data: ${JSON.stringify(boardPayload(30, highlight))}\n\n`;
+  for (const res of viewers) {
+    try { res.write(frame); } catch { viewers.delete(res); }
+  }
+}
+
+app.get('/api/stream', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    // Sans ça, certains proxys (dont celui de Render) tamponnent le flux
+    // et l'écran ne recevrait rien avant plusieurs secondes.
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders?.();
+  res.write(`data: ${JSON.stringify(boardPayload(30))}\n\n`);
+  viewers.add(res);
+
+  // Battement de cœur : maintient la connexion ouverte à travers les proxys
+  // qui coupent les connexions inactives.
+  const beat = setInterval(() => {
+    try { res.write(': ping\n\n'); } catch { /* fermée */ }
+  }, 20_000);
+
+  req.on('close', () => {
+    clearInterval(beat);
+    viewers.delete(res);
+    res.end();
+  });
+});
 
 /* ----------------------------- API -------------------------------- */
 
@@ -240,6 +298,7 @@ app.post('/api/score', rateLimit, async (req, res) => {
   const position = sorted.findIndex((s) => s.id === entry.id) + 1;
 
   console.log(`[score] ${entry.name} — ${entry.spins} tour(s) → #${position}`);
+  broadcast({ id: entry.id, kind: 'score' });
 
   res.status(201).json({
     entry,
@@ -277,6 +336,7 @@ app.post('/api/gamble', rateLimit, async (req, res) => {
   const position = sorted.findIndex((s) => s.id === entry.id) + 1;
 
   console.log(`[roulette] ${entry.name} mise ${entry.spins} → case ${slot} (×${multiplier}) = ${entry.score}`);
+  broadcast({ id: entry.id, kind: multiplier === 0 ? 'bust' : 'gamble', multiplier });
 
   res.json({
     slot,
@@ -298,6 +358,7 @@ app.delete('/api/leaderboard', adminOnly, async (req, res) => {
   scores = [];
   await saveScores();
   console.log(`[db] classement réinitialisé (sauvegarde : ${backupName || 'aucune'})`);
+  broadcast({ kind: 'reset' });
   res.json({ ok: true, backup: backupName });
 });
 

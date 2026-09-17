@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Spin Challenge — Classement</title>
+
+<style>
+  /* ------------------------------------------------------------------
+     Écran mur : conçu pour 1000 × 5000 px (5 écrans empilés, ratio 1:5),
+     mais entièrement piloté par des proportions — la page reste juste sur
+     un laptop comme sur le mur.
+
+     Le dimensionnement ne repose PAS sur des unités vh : à 5000 px de haut
+     un `font-size: 4vh` ferait 200 px et exploserait la mise en page. Tout
+     est calculé à partir de la hauteur réelle d'une ligne (--row), mesurée
+     en JS, ce qui donne un rendu correct à n'importe quel ratio.
+     ------------------------------------------------------------------ */
+  :root{
+    --bg:#05070f; --panel:#0e1428; --line:rgba(148,163,184,.16);
+    --txt:#eef2ff; --muted:#8194b0;
+    --accent:#22d3ee; --accent-2:#a855f7; --gold:#fcd34d;
+    --row: 80px;   /* hauteur d'une ligne, calculée en JS */
+    /* Unité typographique : la hauteur de ligne SEULE ne suffit pas. Sur un
+       mur 1000 × 5000, des lignes de 300 px de haut avec des polices calées
+       dessus écrasaient la colonne du pseudo à zéro. `--u` tient compte des
+       deux dimensions. */
+    --u: 60px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%; overflow:hidden}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; user-select:none;
+  }
+  body::before{
+    content:""; position:fixed; inset:-20%; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(38% 22% at 25% 12%, rgba(34,211,238,.16), transparent 62%),
+      radial-gradient(38% 22% at 75% 84%, rgba(168,85,247,.16), transparent 62%);
+    animation:drift 26s ease-in-out infinite alternate;
+  }
+  @keyframes drift{from{transform:translate3d(-2%,-1%,0)}to{transform:translate3d(2%,1%,0)}}
+
+  #wall{
+    position:relative; z-index:1;
+    height:100dvh; display:flex; flex-direction:column;
+    padding:calc(var(--u) * .34) calc(var(--u) * .3);
+    gap:calc(var(--u) * .3);
+  }
+
+  /* ---------------- En-tête ---------------- */
+  header{text-align:center; flex:0 0 auto}
+  .kicker{
+    font-size:min(calc(var(--u) * .22), 3.4vw); font-weight:900; letter-spacing:.42em;
+    color:var(--muted); text-transform:uppercase;
+  }
+  h1{
+    /* Borné par la largeur : « CLASSEMENT » à 0,7 × --u dépasse 1180 px sur
+       le mur, soit plus que ses 1000 px de large — le mot était tronqué. */
+    font-size:min(calc(var(--u) * .7), 11vw); font-weight:900; letter-spacing:-.02em;
+    line-height:1; margin:calc(var(--u) * .14) 0;
+    background:linear-gradient(100deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub{font-size:min(calc(var(--u) * .22), 3.6vw); font-weight:700; color:var(--muted)}
+
+  /* ---------------- Lignes ---------------- */
+  #rows{flex:1 1 auto; position:relative; min-height:0}
+  .row{
+    position:absolute; left:0; right:0; height:var(--row);
+    /* Grille plutôt que flex : les colonnes sont des fractions de la LARGEUR
+       disponible, donc le pseudo garde toujours sa place quelle que soit la
+       hauteur des lignes. */
+    display:grid; grid-template-columns:12% 1fr auto;
+    align-items:center; gap:calc(var(--u) * .18);
+    padding:0 calc(var(--u) * .28); overflow:hidden;
+    background:linear-gradient(90deg,var(--panel),rgba(14,20,40,.45));
+    border:1px solid var(--line); border-radius:calc(var(--u) * .22);
+    /* Le repositionnement est animé : sur un mur, voir une ligne doubler
+       une autre vaut tous les rafraîchissements du monde. */
+    transition:transform .7s cubic-bezier(.2,.8,.2,1), opacity .4s ease;
+    will-change:transform;
+  }
+  .row.enter{opacity:0; transform:translateY(var(--y)) scale(.94)}
+
+  .pos{
+    text-align:center; font-size:calc(var(--u) * .4); font-weight:900;
+    color:var(--muted); font-variant-numeric:tabular-nums; line-height:1;
+  }
+  .who{min-width:0; overflow:hidden}
+  .name{
+    /* --ns : facteur de réduction pour les pseudos longs (posé en JS). */
+    font-size:calc(var(--u) * .28 * var(--ns, 1)); font-weight:900; line-height:1.05;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .detail{
+    font-size:calc(var(--u) * .16); font-weight:800; color:var(--muted);
+    margin-top:calc(var(--u) * .06);
+    /* Sans ça, « 11 tours × 2 » passe à la ligne et fait déborder la ligne. */
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .detail.win{color:var(--gold)}
+  .detail.bust{color:#fb7185}
+  .pts{
+    text-align:right; font-variant-numeric:tabular-nums;
+    font-size:calc(var(--u) * .42); font-weight:900; line-height:1;
+    color:var(--accent); white-space:nowrap;
+  }
+  .pts small{display:block; font-size:calc(var(--u) * .14); color:var(--muted); letter-spacing:.2em}
+
+  /* Podium */
+  .row.p1{border-color:rgba(252,211,77,.55); background:linear-gradient(90deg,rgba(252,211,77,.16),rgba(14,20,40,.5))}
+  .row.p1 .pts{color:var(--gold)}
+  .row.p2{border-color:rgba(203,213,225,.42); background:linear-gradient(90deg,rgba(203,213,225,.10),rgba(14,20,40,.5))}
+  .row.p3{border-color:rgba(251,146,60,.42); background:linear-gradient(90deg,rgba(251,146,60,.10),rgba(14,20,40,.5))}
+
+  /* Nouvelle arrivée : la ligne doit sauter aux yeux depuis le fond de la salle */
+  .row.flash{animation:flash 2.4s ease-out}
+  @keyframes flash{
+    0%{box-shadow:0 0 0 0 rgba(34,211,238,.9); border-color:var(--accent)}
+    12%{box-shadow:0 0 calc(var(--row)*.7) calc(var(--row)*.1) rgba(34,211,238,.55)}
+    100%{box-shadow:0 0 0 0 rgba(34,211,238,0)}
+  }
+  .row.jackpot{animation:jack 2.6s ease-out}
+  @keyframes jack{
+    0%,100%{box-shadow:0 0 0 0 rgba(252,211,77,0)}
+    10%{box-shadow:0 0 calc(var(--row)*.9) calc(var(--row)*.14) rgba(252,211,77,.8)}
+  }
+
+  #empty{
+    position:absolute; inset:0; display:grid; place-items:center; text-align:center;
+    font-size:calc(var(--u) * .34); font-weight:800; color:var(--muted); line-height:1.6;
+  }
+
+  /* ---------------- Pied ---------------- */
+  footer{
+    flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+    gap:calc(var(--u) * .3);
+    font-size:min(calc(var(--u) * .22), 3.2vw); font-weight:800; color:var(--muted);
+  }
+  #dot{
+    width:calc(var(--u) * .18); height:calc(var(--u) * .18); border-radius:50%;
+    background:#22c55e; box-shadow:0 0 calc(var(--u)*.24) #22c55e;
+  }
+  #dot.off{background:#f43f5e; box-shadow:0 0 calc(var(--u)*.24) #f43f5e; animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+</style>
+</head>
+
+<body>
+<div id="wall">
+  <header>
+    <div class="kicker">Spin Challenge</div>
+    <h1>CLASSEMENT</h1>
+    <div class="sub" id="sub">En attente des premiers joueurs…</div>
+  </header>
+
+  <div id="rows">
+    <div id="empty">Personne n'a encore joué.<br>À toi de lancer le défi&nbsp;!</div>
+  </div>
+
+  <footer>
+    <span id="dot"></span>
+    <span id="status">Connexion…</span>
+  </footer>
+</div>
+
+<script src="/board.js"></script>
+</body>
+</html>
