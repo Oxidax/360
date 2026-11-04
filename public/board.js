@@ -381,6 +381,27 @@ function connect() {
 
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/*  Écran toujours allumé                                              */
+/* ------------------------------------------------------------------ */
+// Une borne qui passe en veille au milieu d'un événement… L'API Screen Wake
+// Lock (Firefox 126+, Chrome 84+) garde l'écran allumé tant que la page est
+// affichée. Le système relâche le verrou quand la page est masquée : on le
+// redemande à son retour, et après toute libération imprévue.
+let wakeLock = null;
+async function keepAwake() {
+  if (!('wakeLock' in navigator) || document.visibilityState !== 'visible' || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => {
+      wakeLock = null;
+      setTimeout(keepAwake, 3000);
+    });
+  } catch { wakeLock = null; }
+}
+document.addEventListener('visibilitychange', keepAwake);
+keepAwake();
+
 // Le logo influe sur la place restante : on attend qu'il soit mesurable.
 el.logo.addEventListener('load', () => relayoutIfNeeded(true));
 relayoutIfNeeded(true);

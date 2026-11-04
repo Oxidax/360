@@ -16,6 +16,82 @@ machine, aucune connexion internet n'est nécessaire une fois installé.
 
 ---
 
+## 0. Kit clé USB hors-ligne (le mode « événement »)
+
+Tout le dispositif sur une clé : on la branche sur le PC Linux, on lance,
+et ça tourne **sans aucune connexion internet** — même si Node n'est pas
+installé sur le PC.
+
+### Fabriquer le kit (sur le Mac, avec internet)
+
+```bash
+bash scripts/construire-cle.sh                 # → dist/SPIN-CHALLENGE/
+bash scripts/construire-cle.sh /Volumes/SPIN   # … et le copie sur la clé
+```
+
+Le kit (~165 Mo) contient :
+
+| Élément | Rôle |
+| ------- | ---- |
+| `LANCER.sh` | démarre tout : serveur + fenêtre BORNE + fenêtre MUR |
+| `REGLAGES.txt` | durée, décompte, joueurs par écran, calage du mur… |
+| `LISEZ-MOI.txt` | la notice pour le jour J |
+| `runtime/node` | Node 24 LTS pour Linux x86_64, **vérifié par SHA-256** |
+| `app/` | le programme, ses dépendances, le modèle, les polices |
+
+Le script refuse de produire un kit si l'empreinte de Node ne correspond pas
+à celle publiée, si une dépendance contient un module natif (il ne serait pas
+portable du Mac vers Linux), ou si une page appelle encore une ressource en
+ligne.
+
+### Sur le PC Linux
+
+```bash
+bash LANCER.sh                  # depuis le dossier de la clé
+bash LANCER.sh --remise-a-zero  # vider le classement (avec sauvegarde)
+```
+
+**Pourquoi `bash LANCER.sh`** : une clé en FAT32 ne stocke pas le droit
+d'exécution, et Linux la monte souvent sans le permettre (c'est exactement ce
+qui donnait « pas l'autorisation d'ouvrir ce fichier »). `bash` lit le fichier
+sans avoir besoin de ce droit.
+
+Pour la même raison, **rien ne s'exécute depuis la clé** : au premier
+lancement, le programme est recopié dans `~/SpinChallenge` (une fois par
+version, une vingtaine de secondes) et lancé de là. Une icône est posée sur le
+bureau pour les fois suivantes ; la clé n'est alors plus nécessaire.
+
+Ce que fait le lanceur :
+
+- installe ou met à jour la copie locale, **sans toucher aux scores**
+- démarre le serveur et le **relance seul s'il s'arrête**
+- ouvre deux Firefox à **profils dédiés et préréglés** : aucun écran
+  d'accueil, **caméra autorisée d'office** sur la borne (ni question ni
+  indicateur flottant), mur **sans onglets ni barre d'adresse**. Chaque
+  fenêtre retrouve la place et la taille où on l'a laissée
+- empêche la mise en veille des écrans (verrou système + Screen Wake Lock
+  dans les pages)
+- à la fermeture : arrête tout, et **copie les scores sur la clé**
+  (`sauvegarde-scores/`)
+
+Les scores vivent dans `~/SpinChallenge/donnees/` (variable `DATA_DIR` du
+serveur), hors du dossier du programme qui est remplacé à chaque mise à jour.
+
+### Ce qui a été testé, et comment
+
+Depuis le Mac, faute de PC Linux sous la main, sur une **clé simulée sans
+aucun droit d'exécution**, avec le bash 3.2 de macOS et un `REGLAGES.txt` à
+fins de ligne Windows : installation, mise à jour (scores conservés), lecture
+des réglages (valeurs invalides signalées et ignorées), démarrage, **aucune
+requête hors de `localhost`**, serveur tué en `kill -9` puis relancé, double
+lancement, remise à zéro (serveur en marche et arrêté), fermeture de la
+fenêtre pendant et après le démarrage.
+
+**Pas testé** (impossible sans le PC) : l'exécution du Node Linux lui-même,
+l'ouverture des fenêtres Firefox, l'icône de bureau KDE, la caméra.
+
+---
+
 ## 1. Installation
 
 ```bash
@@ -70,6 +146,8 @@ de faux positifs. **À relancer après chaque changement de réglage** dans
 
 ```
 V1/
+├── usb/                   # kit clé USB : lanceur, réglages, notice (§0)
+├── scripts/construire-cle.sh  # fabrique le kit hors-ligne
 ├── server.js              # Express : statique + API classement
 ├── render.yaml            # déploiement en ligne (§9)
 ├── leaderboard.json       # base de données (créée automatiquement)

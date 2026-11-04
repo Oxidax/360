@@ -7,3 +7,8 @@ leaderboard.backup-*.json
 
 *.tmp
 .DS_Store
+
+# Kit clé USB : se reconstruit avec scripts/construire-cle.sh
+# (le moteur Node fait 120 Mo, au-delà de la limite de GitHub)
+dist/
+.cache-cle/

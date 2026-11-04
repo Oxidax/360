@@ -16,7 +16,12 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const ROOT = __dirname;
-const DB_FILE = path.join(ROOT, 'leaderboard.json');
+// Les scores peuvent vivre ailleurs que dans le dossier du programme : sur la
+// version clé USB, le programme est recopié (et remplacé à chaque mise à
+// jour) alors que les scores, eux, doivent survivre.
+const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : ROOT;
+fs.mkdirSync(DATA_DIR, { recursive: true });
+const DB_FILE = path.join(DATA_DIR, 'leaderboard.json');
 
 /* ------------------------------------------------------------------ */
 /*  La roue de la fortune                                              */
@@ -353,7 +358,7 @@ app.delete('/api/leaderboard', adminOnly, async (req, res) => {
   let backupName = null;
   if (scores.length) {
     backupName = `leaderboard.backup-${Date.now()}.json`;
-    await fsp.writeFile(path.join(ROOT, backupName), JSON.stringify(scores, null, 2), 'utf8');
+    await fsp.writeFile(path.join(DATA_DIR, backupName), JSON.stringify(scores, null, 2), 'utf8');
   }
   scores = [];
   await saveScores();

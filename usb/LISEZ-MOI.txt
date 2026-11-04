@@ -1,0 +1,123 @@
+=================================================================
+  SPIN CHALLENGE — kit clé USB
+  Fonctionne sans aucune connexion internet.
+=================================================================
+
+CE QU'IL FAUT
+  - un PC Linux (64 bits classique, Ubuntu 20.04 ou plus récent)
+  - Firefox (déjà présent sur la plupart des Linux)
+  - la webcam branchée
+  - le mur d'écrans + l'écran de la borne branchés
+
+
+-----------------------------------------------------------------
+  1. LANCER
+-----------------------------------------------------------------
+
+LA PREMIÈRE FOIS sur un PC :
+
+  1. Branche la clé.
+  2. Ouvre le dossier SPIN-CHALLENGE de la clé.
+  3. Clic droit dans le dossier → « Ouvrir un terminal ici ».
+  4. Tape :
+
+         bash LANCER.sh
+
+     puis Entrée.
+
+  Le programme s'installe sur le PC (une vingtaine de secondes),
+  puis tout démarre. Une icône « Spin Challenge » apparaît sur le
+  bureau.
+
+LES FOIS SUIVANTES :
+
+  Double-clic sur l'icône « Spin Challenge » du bureau.
+  La clé n'est même plus nécessaire.
+  (Au premier double-clic, KDE peut demander confirmation :
+   réponds « Continuer ».)
+
+  Si la clé est branchée et qu'elle contient une version plus
+  récente, relance plutôt  bash LANCER.sh  depuis la clé : le PC
+  se met à jour tout seul.
+
+POUR ARRÊTER :
+
+  Ferme la fenêtre noire du terminal (ou Ctrl+C dedans).
+  Le serveur et les deux fenêtres se ferment.
+
+
+-----------------------------------------------------------------
+  2. PLACER LES FENÊTRES (une seule fois)
+-----------------------------------------------------------------
+
+Deux fenêtres s'ouvrent :
+
+  MUR    → le classement. Fais-la glisser sur la tour d'écrans et
+           étire-la sur les 5 écrans, comme d'habitude.
+           (Elle n'a ni onglets ni barre d'adresse : c'est voulu.)
+
+  BORNE  → le jeu, en plein écran. Si elle s'ouvre sur le mauvais
+           écran :  Meta + Maj + flèche  (Meta = touche Windows)
+           la déplace sur l'écran voisin.
+
+Firefox se souvient de la place et de la taille de chaque fenêtre :
+au lancement suivant, elles reviennent toutes seules.
+
+Vérifier le calage du mur : dans REGLAGES.txt, mets
+MUR_REPERES=oui et relance. Des lignes rouges marquent les jointures
+calculées entre écrans : chacune doit tomber dans un cadre de
+moniteur. Ensuite, remets  non.
+
+
+-----------------------------------------------------------------
+  3. RÉGLAGES
+-----------------------------------------------------------------
+
+Tout est dans REGLAGES.txt (durée de la manche, décompte, joueurs
+par écran, plein écran…). Ouvre-le avec n'importe quel éditeur de
+texte, change une valeur, enregistre, relance.
+
+
+-----------------------------------------------------------------
+  4. LES SCORES
+-----------------------------------------------------------------
+
+Ils sont enregistrés sur le PC :
+    ~/SpinChallenge/donnees/leaderboard.json
+
+À la fermeture, une copie est aussi faite sur la clé, dans
+sauvegarde-scores/.
+
+Vider le classement (avant un événement) :
+
+    bash LANCER.sh --remise-a-zero
+
+L'ancien classement est gardé dans un fichier de sauvegarde.
+
+
+-----------------------------------------------------------------
+  5. EN CAS DE PROBLÈME
+-----------------------------------------------------------------
+
+« Permission non accordée » / le fichier s'ouvre dans un éditeur
+  → Lance-le avec  bash LANCER.sh  dans un terminal (étape 1).
+    C'est normal sur une clé USB : bash n'a pas besoin de droit
+    particulier.
+
+La webcam ne s'allume pas
+  → Vérifie qu'elle est branchée AVANT de lancer.
+  → Ferme toute autre application qui l'utilise (visio…).
+
+« Le port 3000 est occupé »
+  → Dans REGLAGES.txt, mets par exemple  PORT=3100.
+
+« Le moteur ne démarre pas sur ce PC »
+  → Le système est trop ancien (il faut Ubuntu 20.04 ou récent).
+
+Les écrans se mettent en veille
+  → Le programme l'empêche normalement. Sinon : Paramètres
+    système → Gestion de l'énergie → désactiver la mise en veille
+    de l'écran.
+
+Une fenêtre « Service de portefeuilles de KDE » apparaît
+  → Elle ne vient pas du jeu. Clique sur « Annuler ».

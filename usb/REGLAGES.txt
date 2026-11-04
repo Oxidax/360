@@ -1,0 +1,54 @@
+# ==============================================================
+#  SPIN CHALLENGE — réglages
+#  Modifie une valeur, enregistre, puis relance LANCER.sh.
+#  Une ligne qui commence par # est un commentaire.
+# ==============================================================
+
+# --- Le jeu -----------------------------------------------------
+
+# Durée d'une manche, en secondes (3 à 120)
+DUREE=10
+
+# Décompte avant le départ, en secondes (0 à 10)
+DECOMPTE=5
+
+
+# --- Les fenêtres -----------------------------------------------
+
+# Ouvrir la fenêtre de la borne (webcam + jeu) : oui / non
+OUVRIR_BORNE=oui
+
+# Ouvrir la fenêtre du mur d'écrans (classement) : oui / non
+OUVRIR_MUR=oui
+
+# La borne en plein écran, sans barre ni bouton : oui / non
+# (Alt+F4 pour la fermer)
+BORNE_PLEIN_ECRAN=oui
+
+# Navigateur : auto / firefox / chromium / chrome
+# « auto » prend Firefox s'il est là — c'est le plus fiable avec la webcam.
+NAVIGATEUR=auto
+
+
+# --- Le mur d'écrans --------------------------------------------
+
+# Nombre de joueurs par écran, du haut vers le bas.
+# 1,3,3,3,3 = le 1er seul sur l'écran du haut, puis 3 par écran.
+MUR_LIGNES=1,3,3,3,3
+
+# Lignes rouges aux jointures entre écrans, pour vérifier le calage :
+# oui / non. Mets « oui », regarde, puis remets « non ».
+MUR_REPERES=non
+
+# À remplir SEULEMENT si les lignes rouges ne tombent pas dans les
+# cadres des moniteurs. Laisser vide = calcul automatique.
+#   MUR_HAUTEUR_ECRAN : hauteur d'un moniteur en pixels (ex. 1024)
+#   MUR_HAUT          : décalage du haut de la page en pixels (ex. 30)
+MUR_HAUTEUR_ECRAN=
+MUR_HAUT=
+
+
+# --- Technique --------------------------------------------------
+
+# Port du serveur local. À changer seulement s'il est déjà pris.
+PORT=3000
