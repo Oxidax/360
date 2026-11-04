@@ -13,25 +13,31 @@
 <style>
 /* ====================================================================
    SPIN CHALLENGE — mur d'écrans
-   Pensé pour 1000 × 5000 px (5 écrans empilés), mais entièrement
-   proportionnel. Même DA que la borne : aplats saturés, traitement
-   sticker, couleurs dosées — seul le podium porte de la couleur pleine.
+   --------------------------------------------------------------------
+   Le mur est une TOUR DE 5 ÉCRANS physiques empilés, vus par le système
+   comme 5 affichages distincts, avec une seule fenêtre Firefox étirée
+   par-dessus. Les pixels sont continus, mais les CADRES des moniteurs
+   coupent physiquement l'image : une ligne à cheval sur une jointure se
+   retrouve tranchée en deux.
 
-   Deux variables pilotent la page :
-     --row  hauteur d'une ligne   (calculée en JS)
-     --u    unité typographique   (bornée par la largeur ET la hauteur)
-   Elles sont distinctes : le mur est très haut et très étroit, caler les
-   polices sur la hauteur des lignes écrasait la colonne du pseudo.
+   La page découpe donc le viewport en PANNEAUX calés sur les écrans
+   réels, et ne place jamais une ligne à cheval sur une jointure :
+       écran 1      : logo + 2 lignes
+       écrans 2 à 5 : 3 lignes centrées
+
+   La géométrie est déduite de screen.height, window.screenY et de la
+   hauteur du chrome du navigateur — voir board.js, § Géométrie.
    ==================================================================== */
 :root{
   --mint:#5EFC8D; --yellow:#FFF540; --violet:#5E2BFF;
   --pink:#FF69EB; --red:#FF3E41;
 
-  --bg:#190845; --panel:#26106B; --panel-2:#1E0A54;
+  --bg:#190845; --panel:#26106B;
   --txt:#FFFFFF; --muted:#A99BE0;
   --accent:var(--mint);
 
-  --row:80px; --u:60px;
+  --row:120px;   /* hauteur d'une ligne, calculée en JS */
+  --u:90px;      /* unité typographique, bornée par la largeur */
   --display:'Fredoka','Avenir Next Rounded','SF Pro Rounded',system-ui,sans-serif;
   --body:'Nunito','Avenir Next',system-ui,-apple-system,sans-serif;
 }
@@ -40,31 +46,24 @@ html,body{height:100%; overflow:hidden}
 body{background:var(--bg); color:var(--txt); font-family:var(--body);
   font-weight:800; -webkit-font-smoothing:antialiased; user-select:none}
 
-/* Lueurs de fond, sans rayons : étalés, ils délavaient le violet. */
 body::before{
   content:""; position:fixed; inset:0; z-index:0; pointer-events:none;
   background:
-    radial-gradient(70% 22% at 50% -2%,  rgba(94,43,255,.75), transparent 66%),
-    radial-gradient(60% 18% at 86% 101%, rgba(255,105,235,.20), transparent 70%),
-    radial-gradient(56% 16% at 8% 60%,   rgba(94,252,141,.12), transparent 70%);
+    radial-gradient(64% 14% at 50% -1%,  rgba(94,43,255,.75), transparent 68%),
+    radial-gradient(54% 12% at 86% 101%, rgba(255,105,235,.18), transparent 70%),
+    radial-gradient(50% 10% at 8% 52%,   rgba(94,252,141,.10), transparent 70%);
 }
 
-#wall{position:relative; z-index:1; height:100dvh; display:flex; flex-direction:column;
-  padding:calc(var(--u) * .34) calc(var(--u) * .3); gap:calc(var(--u) * .3)}
+#wall{position:relative; z-index:1; height:100dvh; width:100%}
 
-/* ---------------- En-tête ---------------- */
-header{flex:0 0 auto; text-align:center; position:relative}
-/* `width:fit-content` : sinon le conteneur prend toute la largeur de
-   l'en-tête et le halo, dimensionné en %, s'étale sur tout l'écran. */
+/* ---------------- En-tête (cantonné au 1er écran) ---------------- */
+header{position:absolute; left:0; right:0; text-align:center; z-index:2}
 #logoWrap{position:relative; width:fit-content; margin:0 auto;
   display:grid; place-items:center; isolation:isolate}
-/* Borné en hauteur : sur un écran large et court, un logo calé sur la seule
-   largeur occupait tout l'écran et chassait le classement. */
-#logo{position:relative; z-index:1; width:min(72%, calc(var(--u) * 3.8)); height:auto;
-  max-height:17vh; display:block; filter:drop-shadow(0 10px 22px rgba(0,0,0,.55))}
-/* Rayonnement du logo, repris de l'artwork et cantonné derrière lui. */
-/* Le halo suit la boîte du logo (et donc sa contrainte de hauteur). */
-#burst{position:absolute; z-index:0; width:152%; aspect-ratio:1;
+#logo{position:relative; z-index:1; display:block; width:auto;
+  filter:drop-shadow(0 10px 22px rgba(0,0,0,.55))}
+/* Rayonnement repris de l'artwork, cantonné derrière le logo. */
+#burst{position:absolute; z-index:0; width:150%; aspect-ratio:1;
   background:repeating-conic-gradient(from 0deg,
     var(--mint)   0deg 12deg, transparent 12deg 24deg,
     var(--yellow) 24deg 36deg, transparent 36deg 48deg,
@@ -79,25 +78,34 @@ header{flex:0 0 auto; text-align:center; position:relative}
 @keyframes halo{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){#burst{animation:none}}
 
-.sub{margin-top:calc(var(--u) * .14); font-family:var(--display); font-weight:600;
+#meta{margin-top:calc(var(--u) * .16); display:flex; align-items:center;
+  justify-content:center; gap:calc(var(--u) * .2); flex-wrap:wrap;
+  font-family:var(--display); font-weight:600;
   font-size:min(calc(var(--u) * .26), 4vw); color:var(--muted)}
+#dot{width:calc(var(--u) * .16); height:calc(var(--u) * .16); border-radius:50%;
+  background:var(--mint); box-shadow:0 0 calc(var(--u)*.22) var(--mint); flex:0 0 auto}
+#dot.off{background:var(--red); box-shadow:0 0 calc(var(--u)*.22) var(--red);
+  animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+#status{font-size:min(calc(var(--u) * .18), 2.8vw); letter-spacing:.06em; opacity:.8}
 
 /* ---------------- Lignes ---------------- */
-#rows{flex:1 1 auto; position:relative; min-height:0}
+/* Une seule couche absolue pour TOUTES les lignes, quel que soit leur
+   écran : c'est ce qui permet à une ligne de glisser d'un panneau au
+   suivant quand le classement bouge, sans saut. */
+#rows{position:absolute; inset:0; z-index:1}
 .row{
-  position:absolute; left:0; right:0; height:var(--row);
+  position:absolute; height:var(--row);
   display:grid; grid-template-columns:12% 1fr auto;
   align-items:center; gap:calc(var(--u) * .18);
   padding:0 calc(var(--u) * .3); overflow:hidden;
   background:var(--panel);
   border:calc(var(--u) * .045) solid rgba(255,255,255,.9);
   border-radius:calc(var(--u) * .3);
-  /* Le repositionnement est animé : sur un mur, voir une ligne doubler
-     une autre vaut tous les rafraîchissements du monde. */
   transition:transform .7s cubic-bezier(.2,.8,.2,1), opacity .4s ease;
   will-change:transform;
 }
-.row.enter{opacity:0; transform:translateY(var(--y)) scale(.94)}
+.row.enter{opacity:0}
 
 .pos{text-align:center; font-family:var(--display); font-weight:700;
   font-size:calc(var(--u) * .4); color:var(--muted);
@@ -112,7 +120,6 @@ header{flex:0 0 auto; text-align:center; position:relative}
 .detail{
   font-size:calc(var(--u) * .155); font-weight:900; color:var(--muted);
   margin-top:calc(var(--u) * .06); letter-spacing:.02em;
-  /* Sans ça, « 11 tours × 2 » passe à la ligne et fait déborder la ligne. */
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .detail.win{color:var(--yellow)}
@@ -125,12 +132,10 @@ header{flex:0 0 auto; text-align:center; position:relative}
 
 /* Podium — seules ces trois lignes portent de la couleur pleine. */
 .row.p1{background:var(--yellow); border-color:#fff;
-  box-shadow:calc(var(--u) * .1) calc(var(--u) * .1) 0 0 var(--mint)}
-.row.p1 .pos,.row.p1 .name{color:var(--violet)}
-.row.p1 .pts{color:var(--violet)}
-.row.p1 .detail{color:#8A5A00}
+  box-shadow:calc(var(--u) * .09) calc(var(--u) * .09) 0 0 var(--mint)}
+.row.p1 .pos,.row.p1 .name,.row.p1 .pts{color:var(--violet)}
+.row.p1 .detail,.row.p1 .pts small{color:#8A5A00}
 .row.p1 .detail.bust{color:#B3001B}
-.row.p1 .pts small{color:#8A5A00}
 
 .row.p2{background:var(--mint); border-color:#fff;
   box-shadow:calc(var(--u) * .08) calc(var(--u) * .08) 0 0 var(--violet)}
@@ -157,20 +162,21 @@ header{flex:0 0 auto; text-align:center; position:relative}
   10%{box-shadow:0 0 calc(var(--u)*1.1) calc(var(--u)*.18) rgba(255,245,64,.9)}
 }
 
-#empty{position:absolute; inset:0; display:grid; place-items:center; text-align:center;
+#empty{position:absolute; left:0; right:0; z-index:1; text-align:center;
   font-family:var(--display); font-weight:600;
   font-size:min(calc(var(--u) * .34), 5vw); color:var(--muted); line-height:1.6}
 #empty b{color:var(--yellow)}
 
-/* ---------------- Pied ---------------- */
-footer{flex:0 0 auto; display:flex; align-items:center; justify-content:center;
-  gap:calc(var(--u) * .3); font-size:min(calc(var(--u) * .2), 3.2vw);
-  font-weight:900; color:var(--muted); letter-spacing:.08em}
-#dot{width:calc(var(--u) * .17); height:calc(var(--u) * .17); border-radius:50%;
-  background:var(--mint); box-shadow:0 0 calc(var(--u)*.24) var(--mint)}
-#dot.off{background:var(--red); box-shadow:0 0 calc(var(--u)*.24) var(--red);
-  animation:blink 1s infinite}
-@keyframes blink{50%{opacity:.25}}
+/* ---------------- Calage (?guides=1) ---------------- */
+/* Trace une ligne à chaque jointure calculée : si elle tombe pile dans
+   le cadre d'un moniteur, le calage est bon. */
+#guides{position:absolute; inset:0; z-index:9; pointer-events:none; display:none}
+#guides.on{display:block}
+#guides .edge{position:absolute; left:0; right:0; height:0;
+  border-top:3px dashed var(--red)}
+#guides .edge span{position:absolute; left:12px; top:8px;
+  background:var(--red); color:#1A0004; font:900 15px/1 var(--body);
+  padding:6px 11px; border-radius:9px; letter-spacing:.06em}
 </style>
 </head>
 
@@ -181,17 +187,16 @@ footer{flex:0 0 auto; display:flex; align-items:center; justify-content:center;
       <div id="burst" aria-hidden="true"></div>
       <img id="logo" src="/brand/logo.png" alt="Spin Challenge" />
     </div>
-    <div class="sub" id="sub">En attente des premiers joueurs…</div>
+    <div id="meta">
+      <span id="dot"></span>
+      <span id="sub">En attente des premiers joueurs…</span>
+      <span id="status"></span>
+    </div>
   </header>
 
-  <div id="rows">
-    <div id="empty">Personne n'a encore joué.<br><b>À toi de lancer le défi&nbsp;!</b></div>
-  </div>
-
-  <footer>
-    <span id="dot"></span>
-    <span id="status">Connexion…</span>
-  </footer>
+  <div id="rows"></div>
+  <div id="empty">Personne n'a encore joué.<br><b>À toi de lancer le défi&nbsp;!</b></div>
+  <div id="guides"></div>
 </div>
 
 <script src="/board.js"></script>

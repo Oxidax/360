@@ -186,8 +186,55 @@ l'animation ou faire une démo.
 
 ## 4 ter. Le mur d'écrans (`/board`)
 
-Conçu pour **5 écrans empilés formant un 1000 × 5000 px** (ratio 1:5), mais
-entièrement proportionnel : la page reste juste sur un laptop comme sur le mur.
+Le mur est une **tour de 5 moniteurs empilés**, vus par le système comme
+5 affichages distincts, avec **une seule fenêtre Firefox** étirée par-dessus
+(F11 ne convient pas : il passerait en plein écran sur un seul moniteur).
+
+### Le vrai problème : les cadres
+
+Les pixels sont continus d'un écran à l'autre, mais **les cadres des moniteurs
+coupent physiquement l'image**. Une ligne à cheval sur une jointure se
+retrouve tranchée en deux, moitié en haut d'un écran, moitié en bas du
+précédent.
+
+La page découpe donc le viewport en **panneaux calés sur les écrans réels** et
+ne place jamais une ligne sur une jointure :
+
+| Écran | Contenu |
+| ----- | ------- |
+| 1 (haut) | logo + **2 lignes** |
+| 2 à 5 | **3 lignes** centrées |
+
+Soit 14 joueurs affichés. Les lignes gardent toutes la même hauteur, et dans
+chaque panneau elles sont centrées dans la place disponible — ce qui laisse
+une marge de sécurité de part et d'autre de chaque cadre.
+
+### Comment la géométrie est déduite
+
+Les 5 moniteurs occupent, sur le bureau virtuel, les bandes `[0,S]`, `[S,2S]`…
+La fenêtre commence plus bas que 0 (barre de titre, onglets, barre d'adresse).
+
+```
+jointure k, en coordonnées du viewport  =  k × S − hautDuViewport
+
+S              = screen.height                        (écrans identiques)
+hautDuViewport = window.screenY + (outerHeight − innerHeight)
+```
+
+C'est automatique. Si le calage tombe à côté (écrans de tailles différentes,
+fenêtre qui ne part pas du haut), trois paramètres d'URL reprennent la main :
+
+| Paramètre | Effet | Exemple |
+| --------- | ----- | ------- |
+| `?guides=1` | **Trace une ligne rouge à chaque jointure calculée** et affiche la géométrie détectée | pour régler |
+| `?h=` | Force la hauteur d'un moniteur, en pixels | `?h=1024` |
+| `?top=` | Force la position du haut du viewport | `?top=120` |
+| `?rows=` | Change la répartition des lignes | `?rows=2,3,3,3,3` |
+
+**Procédure de calage le jour J** : ouvre
+`…/board?guides=1`, regarde où tombent les lignes rouges. Si chacune disparaît
+dans le cadre d'un moniteur, c'est bon — enlève `guides` et c'est réglé. Sinon,
+ajoute `?h=` avec la hauteur réelle d'un écran (`xrandr` la donne).
 
 ### Mise à jour en temps réel
 
@@ -195,34 +242,16 @@ Le mur ne sonde pas le serveur : il ouvre un flux **SSE** (`/api/stream`) et
 reçoit le classement **à l'instant** où une manche se termine. Le public voit
 la ligne apparaître pendant que le joueur est encore devant la borne.
 
-Si le flux tombe, la page bascule automatiquement sur un sondage toutes les
-4 secondes et tente de se reconnecter — le témoin en bas de page indique l'état
-(vert « En direct », rouge « Reconnexion… »).
-
-### Mise en page adaptative
-
-Le nombre de lignes et leur taille dépendent de **la hauteur disponible et du
-nombre de joueurs** :
-
-| Écran | Lignes affichées | Hauteur de ligne |
-| ----- | ---------------- | ---------------- |
-| Mur 1000 × 5000 | jusqu'à 25 | ~300 px |
-| 1440 × 900 (laptop) | 3-4 | ~300 px |
-
-Avec peu de joueurs, les lignes **grandissent pour remplir l'écran** plutôt que
-de laisser le mur aux trois quarts vide.
-
-Deux variables pilotent tout : `--row` (hauteur d'une ligne) et `--u` (unité
-typographique). Elles sont distinctes parce que le mur est très haut et très
-étroit : caler les polices sur la hauteur des lignes écrasait la colonne du
-pseudo à zéro. `--u` est bornée par la largeur *et* la hauteur.
+Si le flux tombe, la page bascule seule sur un sondage toutes les 4 secondes et
+tente de se reconnecter — la pastille à côté du compteur passe au rouge.
 
 ### Animations
 
-- les lignes **glissent** vers leur nouvelle position quand le classement change
-  (on voit un joueur en doubler un autre)
+- les lignes **glissent** vers leur nouvelle position quand le classement
+  change, y compris d'un écran à l'autre (toutes les lignes vivent dans une
+  seule couche, ce qui rend le déplacement continu malgré les panneaux)
 - la manche qui vient de se terminer **clignote**, en doré pour un ×5 ou ×10
-- podium doré / argent / bronze
+- podium en aplats pleins : jaune, menthe, rose
 
 ---
 
