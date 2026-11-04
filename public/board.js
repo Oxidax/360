@@ -121,7 +121,6 @@ window.addEventListener('resize', () => render(lastData));
 /*  Rendu                                                              */
 /* ------------------------------------------------------------------ */
 
-const MEDALS = ['🥇', '🥈', '🥉'];
 const nodes = new Map(); // id → élément, pour animer les déplacements
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (m) =>
@@ -140,7 +139,7 @@ function buildRow(entry) {
 
 function fillRow(node, entry) {
   const score = Number.isFinite(entry.score) ? entry.score : entry.spins;
-  node.querySelector('.pos').textContent = MEDALS[entry.rank - 1] || entry.rank;
+  node.querySelector('.pos').textContent = entry.rank;
   const nameEl = node.querySelector('.name');
   nameEl.textContent = entry.name;
   // Un pseudo de 15 lettres ne tient pas dans la colonne à taille pleine.

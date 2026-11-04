@@ -81,6 +81,7 @@ V1/
     ├── app.js             # MediaPipe, comptage, roulette, chrono, API
     ├── board.html         # MUR : classement géant
     ├── board.js           # mise en page adaptative + flux temps réel
+    ├── brand/             # logo détouré, logo source, favicon
     └── models/
         └── pose_landmarker_lite.task
 ```
@@ -222,6 +223,56 @@ pseudo à zéro. `--u` est bornée par la largeur *et* la hauteur.
   (on voit un joueur en doubler un autre)
 - la manche qui vient de se terminer **clignote**, en doré pour un ×5 ou ×10
 - podium doré / argent / bronze
+
+---
+
+## 4 quater. Direction artistique
+
+Reprise du logo. Les couleurs sont **relevées au pixel** sur l'artwork :
+
+| Rôle | Code | Usage |
+| ---- | ---- | ----- |
+| Menthe | `#5EFC8D` | validation, 2ᵉ place, anneau de tour |
+| Jaune | `#FFF540` | action principale, 1ʳᵉ place, score |
+| Violet | `#5E2BFF` | fond, ombres portées, ×5 |
+| Rose | `#FF69EB` | roulette, 3ᵉ place |
+| Rouge | `#FF3E41` | perte, temps critique, ✕0 |
+
+### Le principe : le « sticker »
+
+Chaque élément reprend le traitement du logo — **contour blanc épais + ombre
+portée dure, sans flou** :
+
+```css
+border: 4px solid #fff;
+box-shadow: 8px 8px 0 0 var(--mint);
+```
+
+Les boutons s'enfoncent au clic (l'ombre se résorbe), ce qui donne un retour
+tactile franc, utile sur une borne tactile.
+
+### Dosage
+
+Le fond est un violet profond, pas un arc-en-ciel : étalés sur toute la page,
+les rayons délavaient le violet et grisaient les cartes. **Le rayonnement est
+donc réservé au logo**, où il appartient. Sur le mur, seules les trois lignes
+du podium portent de la couleur pleine — le reste est en violet sourd, ce qui
+fait ressortir le podium.
+
+### Typographie
+
+**Fredoka** (titres, chiffres) et **Nunito** (textes), toutes deux arrondies
+pour coller aux lettrages du logo. Chargées depuis Google Fonts, avec un
+repli sur les polices arrondies du système si le réseau manque.
+
+### Logo
+
+`public/brand/logo.png` est l'artwork **détourné de son fond** (diffusion
+depuis les bords jusqu'au contour blanc du sticker), ce qui permet de le poser
+sur n'importe quel fond. `logo-full.png` conserve l'original avec ses rayons.
+
+> Tailwind a été retiré : une DA aussi typée se code plus proprement à la main,
+> et ça supprime une dépendance réseau sur la borne.
 
 ---
 

@@ -562,8 +562,11 @@ function updateHud(now) {
     el.timeLeft.textContent = (left / 1000).toFixed(1);
     const ratio = left / CONFIG.roundDurationMs;
     el.timeBar.style.transform = `scaleX(${ratio})`;
-    el.timeBar.classList.toggle('low', left <= 5000);
-    el.timeLeft.style.color = left <= 5000 ? 'var(--bad)' : '';
+    // Une classe plutôt qu'une couleur en dur : la DA reste pilotée
+    // depuis la feuille de style.
+    const urgent = left <= 5000;
+    el.timeBar.classList.toggle('low', urgent);
+    el.timeLeft.classList.toggle('low', urgent);
   }
 
   el.ring.setAttribute(
@@ -687,11 +690,11 @@ async function startRound(name) {
   } catch (err) {
     console.error(err);
     setCountdownOverlay(true, '🚫',
-      `Impossible d'accéder à la webcam.<br><span class="text-sm text-slate-400">${
+      `Impossible d'accéder à la webcam.<br><span class="sub">${
         err.name === 'NotAllowedError'
           ? 'Autorise la caméra dans le navigateur puis réessaie.'
           : escapeHtml(err.message)
-      }</span><br><button id="camBack" class="btn btn-ghost mt-5 px-6 py-3">Retour</button>`);
+      }</span><br><button id="camBack" class="btn btn-ghost">Retour</button>`);
     $('#camBack')?.addEventListener('click', backToHome);
     return;
   }
@@ -702,8 +705,8 @@ async function startRound(name) {
   } catch (err) {
     console.error(err);
     setCountdownOverlay(true, '🚫',
-      `Moteur de détection indisponible.<br><span class="text-sm text-slate-400">${escapeHtml(err.message)}</span>` +
-      `<br><button id="camBack" class="btn btn-ghost mt-5 px-6 py-3">Retour</button>`);
+      `Moteur de détection indisponible.<br><span class="sub">${escapeHtml(err.message)}</span>` +
+      `<br><button id="camBack" class="btn btn-ghost">Retour</button>`);
     $('#camBack')?.addEventListener('click', backToHome);
     return;
   }
@@ -780,13 +783,14 @@ function backToHome() {
 
 /** Habillage de chaque multiplicateur. */
 const SLOT_STYLE = {
-  0:  { fill: '#3f0d18', edge: '#9f1239', ink: '#fda4af', label: '✕0' },
-  2:  { fill: '#083344', edge: '#0891b2', ink: '#67e8f9', label: '×2' },
-  3:  { fill: '#2e1065', edge: '#8b5cf6', ink: '#c4b5fd', label: '×3' },
-  5:  { fill: '#4a1d03', edge: '#ea580c', ink: '#fdba74', label: '×5' },
-  10: { fill: '#553b00', edge: '#facc15', ink: '#fde047', label: '×10' },
+  0:  { fill:'#FF3E41', edge:'#FFFFFF', ink:'#FFFFFF', shadow:'#7A0E12', label:'✕0'  },
+  2:  { fill:'#5EFC8D', edge:'#FFFFFF', ink:'#09301B', shadow:'#FFFFFF', label:'×2'  },
+  3:  { fill:'#FF69EB', edge:'#FFFFFF', ink:'#3C0030', shadow:'#FFFFFF', label:'×3'  },
+  5:  { fill:'#5E2BFF', edge:'#FFFFFF', ink:'#FFFFFF', shadow:'#1B0070', label:'×5'  },
+  10: { fill:'#FFF540', edge:'#FFFFFF', ink:'#4A2000', shadow:'#FFFFFF', label:'×10' },
 };
-const styleOf = (m) => SLOT_STYLE[m] || { fill: '#1e293b', edge: '#64748b', ink: '#e2e8f0', label: `×${m}` };
+const styleOf = (m) => SLOT_STYLE[m]
+  || { fill:'#26106B', edge:'#FFFFFF', ink:'#FFFFFF', shadow:'#0B0128', label:`×${m}` };
 
 /** Manche en attente de décision (encaisser ou miser). */
 let pending = null;
@@ -807,7 +811,7 @@ function buildWheel() {
   const defs = document.createElementNS(SVG_NS, 'defs');
   defs.innerHTML =
     '<filter id="jackpotGlow" x="-30%" y="-30%" width="160%" height="160%">' +
-    '<feDropShadow dx="0" dy="0" stdDeviation="7" flood-color="#facc15" flood-opacity="0.85"/>' +
+    '<feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#FFF540" flood-opacity="0.9"/>' +
     '</filter>';
   el.wheelGroup.appendChild(defs);
 
@@ -835,6 +839,7 @@ function buildWheel() {
     label.setAttribute('x', tx.toFixed(2));
     label.setAttribute('y', ty.toFixed(2));
     label.setAttribute('fill', st.ink);
+    label.setAttribute('stroke', st.shadow);
     label.setAttribute('text-anchor', 'middle');
     label.setAttribute('dominant-baseline', 'central');
     label.setAttribute('font-size', mult >= 10 ? '27' : '24');
@@ -850,8 +855,8 @@ function buildWheel() {
   const rim = document.createElementNS(SVG_NS, 'circle');
   rim.setAttribute('cx', CX); rim.setAttribute('cy', CY); rim.setAttribute('r', R);
   rim.setAttribute('fill', 'none');
-  rim.setAttribute('stroke', 'rgba(226,232,240,.35)');
-  rim.setAttribute('stroke-width', '5');
+  rim.setAttribute('stroke', '#FFFFFF');
+  rim.setAttribute('stroke-width', '8');
   el.wheelGroup.appendChild(rim);
 }
 
@@ -1034,13 +1039,13 @@ function revealOutcome(data) {
     el.gambleDetail.textContent = `${pending.spins} × ${multiplier} = ${score} points`;
     [0, 0.09, 0.18, 0.27, 0.42].forEach((d, i) =>
       tone({ freq: [523, 659, 784, 1046, 1318][i], ms: i === 4 ? 620 : 150, type: 'triangle', gain: 0.15, delay: d }));
-    confettiBurst(['#facc15', '#fde047', '#fb923c', '#22d3ee', '#a855f7', '#f8fafc'], 220);
+    confettiBurst(['#FFF540', '#5EFC8D', '#FF69EB', '#5E2BFF', '#FF3E41', '#FFFFFF'], 220);
   } else {
     el.gambleVerdict.textContent = `GAGNÉ ×${multiplier}`;
     el.gambleDetail.textContent = `${pending.spins} × ${multiplier} = ${score} points`;
     tone({ freq: 523, ms: 140, type: 'triangle', gain: 0.14 });
     tone({ freq: 784, ms: 320, type: 'triangle', gain: 0.14, delay: 0.14 });
-    confettiBurst(['#22d3ee', '#67e8f9', '#a855f7', '#f8fafc'], 110);
+    confettiBurst(['#5EFC8D', '#FF69EB', '#FFF540', '#FFFFFF'], 110);
   }
 
   pending.result = data;
@@ -1061,6 +1066,8 @@ function showResult(data) {
   el.resultUnit.textContent = mult == null
     ? (score > 1 ? 'tours' : 'tour')
     : 'points';
+  // Une perte ne doit pas s'afficher dans la couleur des gains.
+  el.resultRank.className = mult === 0 ? 'bad' : '';
   el.resultRank.textContent = mult == null
     ? `${pending.spins} tour${pending.spins > 1 ? 's' : ''} encaissé${pending.spins > 1 ? 's' : ''}`
     : mult === 0
@@ -1230,12 +1237,12 @@ document.addEventListener('visibilitychange', () => {
   el.btnStart.disabled = true;
   try {
     await loadDetector();
-    el.engineStatus.textContent = '✅ Moteur de détection prêt — webcam requise';
-    el.engineStatus.className = 'mt-6 text-xs text-emerald-400';
+    el.engineStatus.textContent = 'Caméra prête — autorise l\'accès quand on te le demande';
+    el.engineStatus.className = 'ok';
   } catch (err) {
     console.error(err);
-    el.engineStatus.textContent = `⚠️ Moteur indisponible : ${err.message}`;
-    el.engineStatus.className = 'mt-6 text-xs text-rose-400';
+    el.engineStatus.textContent = `Moteur indisponible : ${err.message}`;
+    el.engineStatus.className = 'bad';
   } finally {
     el.btnStart.disabled = false;
   }
