@@ -9,6 +9,6 @@ services:
     startCommand: node server.js
     envVars:
       - key: ROUND_MS
-        value: "15000"
+        value: "10000"
       - key: COUNTDOWN
         value: "5"

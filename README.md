@@ -2,7 +2,7 @@
 
 Dispositif événementiel en **deux écrans** : une personne se place devant la
 webcam et fait un maximum de **tours complets à 360°** sur elle-même en
-15 secondes, puis peut **miser son score à la roulette**. Le classement
+10 secondes, puis peut **miser son score à la roulette**. Le classement
 s'affiche en temps réel sur un mur d'écrans.
 
 | URL | Écran | Rôle |
@@ -121,6 +121,30 @@ L'ancien classement est archivé dans `leaderboard.backup-<timestamp>.json`.
 
 ---
 
+## 3 bis. Le déroulé d'une manche
+
+1. Pseudo, puis **« C'est parti ! »**
+2. La caméra s'allume. Deux consignes s'enchaînent **en fondu, par-dessus le
+   retour caméra** (le joueur se voit et peut se placer) :
+   - « Fais **le plus de tours possible** en **10 secondes** ! »
+   - « Reste bien **face à la caméra** » — elle reste affichée tant que le
+     joueur n'est pas détecté, avec une relance « recule un peu » au bout de
+     6 s.
+3. **5, 4, 3, 2, 1, GO**, caméra toujours visible.
+4. 10 secondes de jeu.
+5. **Fin de manche signalée au son.** Le joueur tourne sur lui-même et ne
+   voit pas l'écran : trois bips courts à 3, 2, 1 secondes, puis un long
+   buzzer à zéro, et un grand « STOP ! » pour les spectateurs. Les bips sont
+   programmés dès le départ (et non par la boucle d'affichage), pour tomber
+   pile sur la seconde même si l'affichage ralentit.
+6. La roulette — avec **deux énormes boutons**, parce qu'un joueur qui sort de
+   10 secondes de toupie voit flou. « 🎰 Tourner la roue » domine (jaune,
+   pulsation, reflet qui le balaie) ; « Garder mes tours » reste lisible mais
+   secondaire.
+7. Le score, puis retour automatique à l'accueil.
+
+---
+
 ## 4 bis. La roulette
 
 Après chaque manche, le joueur choisit : **encaisser** son score, ou **tout
@@ -202,10 +226,10 @@ ne place jamais une ligne sur une jointure :
 
 | Écran | Contenu |
 | ----- | ------- |
-| 1 (haut) | logo + **2 lignes** |
+| 1 (haut) | logo + **le 1er seul**, couronné |
 | 2 à 5 | **3 lignes** centrées |
 
-Soit 14 joueurs affichés. Les lignes gardent toutes la même hauteur, et dans
+Soit 13 joueurs affichés. Les lignes gardent toutes la même hauteur, et dans
 chaque panneau elles sont centrées dans la place disponible — ce qui laisse
 une marge de sécurité de part et d'autre de chaque cadre.
 
@@ -229,7 +253,7 @@ fenêtre qui ne part pas du haut), trois paramètres d'URL reprennent la main :
 | `?guides=1` | **Trace une ligne rouge à chaque jointure calculée** et affiche la géométrie détectée | pour régler |
 | `?h=` | Force la hauteur d'un moniteur, en pixels | `?h=1024` |
 | `?top=` | Force la position du haut du viewport | `?top=120` |
-| `?rows=` | Change la répartition des lignes | `?rows=2,3,3,3,3` |
+| `?rows=` | Change la répartition des lignes | `?rows=1,3,3,3,3` |
 
 **Procédure de calage le jour J** : ouvre
 `…/board?guides=1`, regarde où tombent les lignes rouges. Si chacune disparaît
@@ -244,6 +268,19 @@ la ligne apparaître pendant que le joueur est encore devant la borne.
 
 Si le flux tombe, la page bascule seule sur un sondage toutes les 4 secondes et
 tente de se reconnecter — la pastille à côté du compteur passe au rouge.
+
+### Si la fenêtre bouge
+
+La page surveille sa propre géométrie (taille **et position**) une fois par
+seconde et se recale seule. Ce n'est pas du zèle : déplacer une fenêtre
+n'émet aucun événement, et l'étirer sur les 5 écrans n'émet pas toujours
+`resize` — en test, le viewport est passé de 900 à 5000 px sans un seul
+événement, et le mur restait figé sur une ligne.
+
+### Le 1er
+
+Seul sur le premier écran, sous le logo : couronne qui dépasse de sa carte
+en haut à droite et oscille doucement, reflet qui balaie la carte.
 
 ### Animations
 
@@ -376,7 +413,7 @@ Les plus utiles sur le terrain :
 - `modelPath` — passer sur `pose_landmarker_full.task` si tu veux plus de
   précision au prix des FPS (à télécharger dans `public/models/`)
 
-Par défaut : **manche de 15 s, décompte de 5 s**. Pour changer sans toucher
+Par défaut : **manche de 10 s, décompte de 5 s**. Pour changer sans toucher
 au code (durée en millisecondes, décompte en secondes) :
 
 ```bash
@@ -494,7 +531,7 @@ Type=simple
 User=VOTRE_UTILISATEUR
 WorkingDirectory=/home/VOTRE_UTILISATEUR/spin-challenge
 ExecStart=/usr/bin/node server.js
-Environment=ROUND_MS=15000
+Environment=ROUND_MS=10000
 Environment=COUNTDOWN=5
 Restart=always
 RestartSec=3

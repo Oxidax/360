@@ -22,7 +22,7 @@
 
    La page découpe donc le viewport en PANNEAUX calés sur les écrans
    réels, et ne place jamais une ligne à cheval sur une jointure :
-       écran 1      : logo + 2 lignes
+       écran 1      : logo + le 1er, seul, couronné
        écrans 2 à 5 : 3 lignes centrées
 
    La géométrie est déduite de screen.height, window.screenY et de la
@@ -131,8 +131,26 @@ header{position:absolute; left:0; right:0; text-align:center; z-index:2}
   font-size:calc(var(--u) * .13); color:var(--muted); letter-spacing:.2em}
 
 /* Podium — seules ces trois lignes portent de la couleur pleine. */
-.row.p1{background:var(--yellow); border-color:#fff;
-  box-shadow:calc(var(--u) * .09) calc(var(--u) * .09) 0 0 var(--mint)}
+/* Le 1er a son écran à lui : reflet qui le balaie et couronne qui dépasse. */
+.row.p1{overflow:visible; border-color:#fff;
+  background:linear-gradient(110deg, var(--yellow) 0 40%, #FFFCC4 50%, var(--yellow) 60% 100%);
+  background-size:260% 100%;
+  box-shadow:calc(var(--u) * .09) calc(var(--u) * .09) 0 0 var(--mint);
+  animation:shimmer 4s ease-in-out infinite}
+@keyframes shimmer{0%{background-position:125% 0} 55%,100%{background-position:-25% 0}}
+
+.crown{display:none; position:absolute; z-index:3; pointer-events:none;
+  width:calc(var(--u) * .56); height:auto;
+  right:calc(var(--u) * .3); top:calc(var(--u) * -.36);
+  transform-origin:50% 100%;
+  filter:drop-shadow(calc(var(--u)*.04) calc(var(--u)*.05) 0 var(--violet));
+  animation:crown 2.8s ease-in-out infinite}
+.row.p1 .crown{display:block}
+@keyframes crown{
+  0%,100%{transform:rotate(14deg) translateY(0)}
+  50%{transform:rotate(21deg) translateY(calc(var(--u) * -.06))}
+}
+@media (prefers-reduced-motion:reduce){.row.p1,.crown{animation:none}}
 .row.p1 .pos,.row.p1 .name,.row.p1 .pts{color:var(--violet)}
 .row.p1 .detail,.row.p1 .pts small{color:#8A5A00}
 .row.p1 .detail.bust{color:#B3001B}

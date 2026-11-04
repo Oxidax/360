@@ -13,9 +13,9 @@ const num = (k, d) => (params.has(k) && Number.isFinite(+params.get(k)) ? +param
 
 const CONFIG = {
   /* Combien de lignes par écran, du haut vers le bas.
-     Le 1er écran en accueille moins : le logo occupe son haut.
-     Réglable sans toucher au code :  /board?rows=2,3,3,3,3          */
-  rowsPerPanel: (params.get('rows') || '2,3,3,3,3')
+     Le 1er écran est réservé au vainqueur, sous le logo.
+     Réglable sans toucher au code :  /board?rows=1,3,3,3,3          */
+  rowsPerPanel: (params.get('rows') || '1,3,3,3,3')
     .split(',').map((n) => Math.max(0, Math.min(8, parseInt(n, 10) || 0))),
 
   /* Hauteur d'UN moniteur, en pixels. Déduite de screen.height, qui est
@@ -141,7 +141,10 @@ function layout() {
   const blockH0 = perPanel[0] > 0
     ? perPanel[0] * rowH + (perPanel[0] - 1) * gap
     : 0;
-  const headerBand = Math.max(0, p0.height - blockH0 - 2 * pad());
+  // La couronne du 1er dépasse au-dessus de sa carte : on lui réserve la
+  // place, sinon elle mordrait sur le compteur de participations.
+  const crownRoom = perPanel[0] > 0 ? rowH * 0.34 : 0;
+  const headerBand = Math.max(0, p0.height - blockH0 - 2 * pad() - crownRoom);
   // Bornes en PIXELS : `max-width` en pourcentage sur un parent en
   // `width:fit-content` est circulaire, et le navigateur tranche en
   // écrasant le logo.
@@ -207,7 +210,30 @@ function place() {
   }
 }
 
-window.addEventListener('resize', () => { layout(); render(lastData); });
+/**
+ * La mise en page dépend de la taille ET de la position de la fenêtre (une
+ * fenêtre déplacée de 40 px décale toutes les jointures). Or :
+ *  - déplacer une fenêtre n'émet aucun événement ;
+ *  - l'étirer sur 5 écrans n'émet pas toujours `resize` (constaté en test :
+ *    viewport passé de 900 à 5000 px sans un seul événement, mur figé sur
+ *    une ligne).
+ * On surveille donc directement la géométrie, et on ne recalcule que si
+ * elle a changé.
+ */
+let geoKey = '';
+const geometryKey = () => [
+  window.innerWidth, window.innerHeight, window.outerHeight,
+  window.screenY, window.screen?.height,
+].join('|');
+function relayoutIfNeeded(force = false) {
+  const k = geometryKey();
+  if (!force && k === geoKey) return;
+  geoKey = k;
+  layout();
+  render(lastData);
+}
+window.addEventListener('resize', () => relayoutIfNeeded());
+if ('ResizeObserver' in window) new ResizeObserver(() => relayoutIfNeeded()).observe(el.wall);
 
 /* ------------------------------------------------------------------ */
 /*  Rendu                                                              */
@@ -222,7 +248,16 @@ function buildRow(entry) {
   node.innerHTML = `
     <div class="pos"></div>
     <div class="who"><div class="name"></div><div class="detail"></div></div>
-    <div class="pts"><span class="v"></span><small>PTS</small></div>`;
+    <div class="pts"><span class="v"></span><small>PTS</small></div>
+    <svg class="crown" viewBox="0 0 64 54" aria-hidden="true">
+      <path d="M7 45 L3 14 L19 28 L32 5 L45 28 L61 14 L57 45 Z"
+            fill="#FFF540" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+      <rect x="6" y="41" width="52" height="9" rx="3"
+            fill="#FFF540" stroke="#fff" stroke-width="4"/>
+      <circle cx="32" cy="29" r="3.6" fill="#FF69EB"/>
+      <circle cx="18" cy="35" r="2.8" fill="#5EFC8D"/>
+      <circle cx="46" cy="35" r="2.8" fill="#5EFC8D"/>
+    </svg>`;
   return node;
 }
 
@@ -347,10 +382,10 @@ function connect() {
 /* ------------------------------------------------------------------ */
 
 // Le logo influe sur la place restante : on attend qu'il soit mesurable.
-if (el.logo.complete) layout(); else el.logo.addEventListener('load', layout);
-layout();
+el.logo.addEventListener('load', () => relayoutIfNeeded(true));
+relayoutIfNeeded(true);
 connect();
 
-// Un mur tourne des heures sans personne : on revérifie le calage de temps
-// en temps (résolution qui change, écran qui se réveille).
-setInterval(() => { layout(); render(lastData); }, 30_000);
+// Filet de sécurité bon marché : une comparaison de 5 nombres par seconde,
+// un recalcul seulement si la fenêtre a bougé ou changé de taille.
+setInterval(() => relayoutIfNeeded(), 1000);

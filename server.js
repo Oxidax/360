@@ -252,7 +252,7 @@ app.get('/api/stream', (req, res) => {
 // Config partagée avec le client (durée de manche modifiable sans toucher au JS)
 app.get('/api/config', (req, res) => {
   res.json({
-    roundDurationMs: Number(process.env.ROUND_MS || 15000),
+    roundDurationMs: Number(process.env.ROUND_MS || 10000),
     countdownSeconds: Number(process.env.COUNTDOWN || 5),
     topCount: 10,
     wheel: WHEEL,

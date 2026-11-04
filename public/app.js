@@ -16,8 +16,15 @@ import { FilesetResolver, PoseLandmarker }
 
 const CONFIG = {
   /* --- Manche --- */
-  roundDurationMs: 15_000,
+  roundDurationMs: 10_000,
   countdownSeconds: 5,
+
+  /* --- Intro avant le décompte --- */
+  introRuleMs: 3400,       // « fais le plus de tours possible en 10 s »
+  introFaceMinMs: 2600,    // « reste face à la caméra », au minimum…
+  introFaceMaxMs: 15000,   // …et au plus, si personne n'est détecté
+  fadeMs: 650,             // fondu entre deux phrases
+  stopOverlayMs: 1600,     // panneau « STOP ! » en fin de manche
 
   /* --- Détection de pose --- */
   modelPath: '/models/pose_landmarker_lite.task',
@@ -333,6 +340,7 @@ const el = {
   countdown: $('#countdown'),
   countdownNum: $('#countdownNum'),
   countdownMsg: $('#countdownMsg'),
+  introText: $('#introText'),
   debug: $('#debug'),
   // roulette
   gambleCard: $('#gambleCard'),
@@ -344,6 +352,7 @@ const el = {
   bankAmount: $('#bankAmount'),
   btnBank: $('#btnBank'),
   btnGamble: $('#btnGamble'),
+  gambleMax: $('#gambleMax'),
   btnAfterGamble: $('#btnAfterGamble'),
   wheelGroup: $('#wheelGroup'),
   wheelHub: $('#wheelHub'),
@@ -377,6 +386,7 @@ const state = {
   lastVideoTime: -1,
   lastUiAt: 0,
   poseLostSince: 0,
+  warnTimers: [],         // bips d'alerte programmés (3, 2, 1)
   debug: false,
 };
 
@@ -402,7 +412,7 @@ function showScreen(name) {
 let audioCtx = null;
 
 /** Note unique, avec glissando optionnel. Tout est synthétisé : aucun fichier. */
-function tone({ freq, to = null, ms = 150, type = 'sine', gain = 0.12, delay = 0 }) {
+function tone({ freq, to = null, ms = 150, type = 'sine', gain = 0.12, delay = 0, hold = 0 }) {
   try {
     audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -413,11 +423,29 @@ function tone({ freq, to = null, ms = 150, type = 'sine', gain = 0.12, delay = 0
     osc.frequency.setValueAtTime(freq, t0);
     if (to) osc.frequency.exponentialRampToValueAtTime(Math.max(20, to), t0 + ms / 1000);
     g.gain.setValueAtTime(gain, t0);
+    // `hold` maintient le volume avant l'extinction : indispensable pour un
+    // buzzer, qui doit sonner plein et non décroître comme un « ding ».
+    if (hold > 0) g.gain.setValueAtTime(gain, t0 + Math.min(hold, ms) / 1000);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms / 1000);
     osc.connect(g).connect(audioCtx.destination);
     osc.start(t0);
     osc.stop(t0 + ms / 1000 + 0.02);
   } catch { /* le son n'est pas critique */ }
+}
+
+/**
+ * Bips de fin de manche. Le joueur tourne sur lui-même : il ne voit pas
+ * l'écran et ne peut pas savoir que le temps est écoulé. D'où le schéma
+ * des chronos de match — « tut, tut, tut » à 3, 2, 1, puis un long
+ * « tuuuut » franc à zéro.
+ */
+function warnBeep() {
+  tone({ freq: 880, ms: 170, type: 'square', gain: 0.22 });
+}
+function buzzer() {
+  tone({ freq: 1047, ms: 1300, type: 'square', gain: 0.22, hold: 1000 });
+  tone({ freq: 523,  ms: 1300, type: 'square', gain: 0.18, hold: 1000 });
+  tone({ freq: 784,  ms: 1300, type: 'sawtooth', gain: 0.08, hold: 1000 });
 }
 
 function beep(freq = 880, ms = 120, type = 'sine', gain = 0.12) {
@@ -574,9 +602,12 @@ function updateHud(now) {
     (RING_CIRCUMFERENCE * (1 - counter.progress)).toFixed(2)
   );
 
-  // Message d'aide contextuel
+  // Message d'aide contextuel — pendant la manche seulement : pendant
+  // l'intro, il transparaissait sous le voile et doublonnait les consignes.
   let hint = '';
-  if (state.poseLostSince && now - state.poseLostSince > CONFIG.hintDelayMs) {
+  if (state.phase !== 'playing') {
+    hint = '';
+  } else if (state.poseLostSince && now - state.poseLostSince > CONFIG.hintDelayMs) {
     hint = '👀 Reviens dans le cadre !';
   } else if (counter.tracked && counter.quality < 0.45) {
     hint = '🙆 Recule un peu et garde les bras le long du corps';
@@ -614,8 +645,8 @@ function drawOverlay(norm) {
   if (!norm) return;
 
   const color =
-    counter.facing === 'FACE' ? '#22d3ee' :
-    counter.facing === 'DOS' ? '#a855f7' : '#fbbf24';
+    counter.facing === 'FACE' ? '#5EFC8D' :
+    counter.facing === 'DOS' ? '#FF69EB' : '#FFF540';
 
   ctx.lineCap = 'round';
   ctx.lineWidth = Math.max(3, w * 0.005);
@@ -658,9 +689,12 @@ function drawOverlay(norm) {
 function setCountdownOverlay(visible, num, msg) {
   el.countdown.style.display = visible ? 'grid' : 'none';
   if (num !== undefined) {
+    el.countdown.classList.remove('intro');
     el.countdownNum.textContent = num;
-    // Le dégradé (background-clip:text) n'est lisible que sur des chiffres.
-    el.countdownNum.classList.toggle('plain', !/^(\d+|GO.*)$/.test(String(num)));
+    // L'ombre portée colorée ne rend bien que sur des chiffres et des mots ;
+    // les emoji passent en rendu simple.
+    el.countdownNum.classList.toggle('plain', !/^(\d+|GO.*|STOP.*)$/.test(String(num)));
+    el.countdownNum.classList.toggle('stop', /^STOP/.test(String(num)));
     el.countdownNum.style.animation = 'none';
     void el.countdownNum.offsetWidth;
     el.countdownNum.style.animation = '';
@@ -669,6 +703,32 @@ function setCountdownOverlay(visible, num, msg) {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function clearWarnings() {
+  state.warnTimers.forEach(clearTimeout);
+  state.warnTimers = [];
+}
+
+/**
+ * « see » : voile léger, le joueur se voit dans la caméra derrière les
+ * consignes. « dark » : voile opaque, pour les chargements et le STOP.
+ */
+function overlayMode(mode) {
+  el.countdown.classList.toggle('see', mode === 'see');
+}
+
+/** Une consigne à la fois, en fondu, par-dessus le retour caméra. */
+function showPhrase(html) {
+  el.countdown.style.display = 'grid';
+  el.countdown.classList.add('intro');
+  el.introText.innerHTML = html;
+  void el.introText.offsetWidth;          // sinon le fondu d'entrée est sauté
+  el.introText.classList.add('show');
+}
+async function hidePhrase() {
+  el.introText.classList.remove('show');
+  await wait(CONFIG.fadeMs);
+}
 
 async function startRound(name) {
   state.playerName = name;
@@ -682,7 +742,10 @@ async function startRound(name) {
   el.timeBar.style.transform = 'scaleX(1)';
   el.timeBar.classList.remove('low');
   el.hint.style.opacity = '0';
+  el.timeLeft.classList.remove('low');
+  clearWarnings();
   showScreen('game');
+  overlayMode('dark');
   setCountdownOverlay(true, '…', 'Démarrage de la caméra…');
 
   try {
@@ -711,26 +774,49 @@ async function startRound(name) {
     return;
   }
 
-  // La boucle tourne déjà pendant le décompte : on attend de « voir » la
-  // personne avant de lancer le chrono.
+  // La boucle de détection tourne dès maintenant : le joueur se voit à
+  // l'écran (et on sait s'il est bien cadré) pendant qu'on lui explique.
   tick();
+  overlayMode('see');
 
-  setCountdownOverlay(true, '🙂', 'Place-toi <b>face à la caméra</b>, en pied');
-  const deadline = performance.now() + 15000;
-  while (!counter.tracked && performance.now() < deadline) {
-    if (state.phase !== 'countdown') return; // annulé entre-temps
+  // 1) La règle.
+  const secs = Math.round(CONFIG.roundDurationMs / 1000);
+  showPhrase(`Fais <b>le plus de tours possible</b><br>en <b>${secs}&nbsp;secondes</b>&nbsp;!`);
+  await wait(CONFIG.introRuleMs);
+  if (state.phase !== 'countdown') return;
+  await hidePhrase();
+  if (state.phase !== 'countdown') return;
+
+  // 2) Le placement. La consigne reste tant qu'on ne voit pas le joueur
+  //    (dans la limite d'introFaceMaxMs), pour ne pas lancer le chrono
+  //    sur quelqu'un qui est hors cadre.
+  showPhrase('Reste bien <b>face à la caméra</b>');
+  const t0 = performance.now();
+  let nudged = false;
+  while (performance.now() - t0 < CONFIG.introFaceMaxMs) {
+    if (state.phase !== 'countdown') return;
+    const elapsed = performance.now() - t0;
+    if (counter.tracked && elapsed >= CONFIG.introFaceMinMs) break;
+    if (!nudged && !counter.tracked && elapsed > 6000) {
+      nudged = true;
+      await hidePhrase();
+      showPhrase('Recule un peu&nbsp;: on doit te voir <b>en entier</b>');
+    }
     await wait(100);
   }
+  await hidePhrase();
+  if (state.phase !== 'countdown') return;
 
+  // 3) Le décompte, caméra toujours visible.
   for (let i = CONFIG.countdownSeconds; i >= 1; i--) {
     if (state.phase !== 'countdown') return;
-    setCountdownOverlay(true, i, 'Prêt&nbsp;?');
-    beep(520, 90, 'sine', 0.1);
+    setCountdownOverlay(true, i, '');
+    beep(520, 90, 'sine', 0.12);
     await wait(1000);
   }
   if (state.phase !== 'countdown') return;
 
-  setCountdownOverlay(true, 'GO !', 'Tourne&nbsp;!');
+  setCountdownOverlay(true, 'GO !', '');
   beep(1046, 220, 'square', 0.14);
   await wait(400);
 
@@ -744,6 +830,14 @@ async function startRound(name) {
   // ne se terminerait jamais toute seule.
   clearTimeout(state.endTimer);
   state.endTimer = setTimeout(() => endRound('time'), CONFIG.roundDurationMs + 50);
+
+  // Bips d'alerte programmés dès le départ, et non déclenchés par la boucle
+  // de rendu : celle-ci peut ralentir (onglet en arrière-plan, image qui
+  // saute) alors qu'un signal sonore doit tomber pile sur la seconde.
+  clearWarnings();
+  state.warnTimers = [3, 2, 1].map((sec) =>
+    setTimeout(() => { if (state.phase === 'playing') warnBeep(); },
+      CONFIG.roundDurationMs - sec * 1000));
 }
 
 async function endRound(reason) {
@@ -755,12 +849,19 @@ async function endRound(reason) {
   state.phase = 'ended';
   cancelAnimationFrame(state.rafId);
   clearTimeout(state.endTimer);
+  clearWarnings();
   ctx.clearRect(0, 0, el.overlay.width, el.overlay.height);
 
-  beep(392, 160, 'sine', 0.14);
-  setTimeout(() => beep(523, 320, 'sine', 0.14), 170);
-
   if (reason === 'abort') { backToHome(); return; }
+
+  // Le joueur, dos à l'écran, entend le buzzer ; les spectateurs voient le
+  // panneau. Ce temps mort lui laisse aussi le temps de reprendre ses
+  // esprits avant de devoir lire les boutons de la roulette.
+  buzzer();
+  overlayMode('dark');
+  setCountdownOverlay(true, 'STOP !', 'C\'est fini, tu peux t\'arrêter&nbsp;!');
+  await wait(CONFIG.stopOverlayMs);
+  setCountdownOverlay(false);
 
   await submitScore(state.playerName, spins, durationMs);
 }
@@ -769,6 +870,7 @@ function backToHome() {
   state.phase = 'home';
   cancelAnimationFrame(state.rafId);
   clearTimeout(state.endTimer);
+  clearWarnings();
   stopAutoReturn();
   setCountdownOverlay(false);
   showScreen('home');
@@ -969,7 +1071,9 @@ function showGamble(entry, fallbackTop, total) {
   el.gambleScore.textContent = entry.spins;
   el.bankAmount.textContent = `${entry.spins} tour${entry.spins > 1 ? 's' : ''}`;
   el.gambleVerdict.textContent = '';
-  el.gambleDetail.textContent = 'Tu peux garder ton score… ou tout miser.';
+  // Les gros boutons suffisent : un joueur qui sort de 10 s de toupie ne lit
+  // pas une phrase de plus.
+  el.gambleDetail.textContent = '';
   el.hubText.textContent = '🎲';
   el.wheelHub.classList.remove('win');
   el.wheelHub.style.color = '';
@@ -1228,6 +1332,7 @@ document.addEventListener('visibilitychange', () => {
   } catch { /* on garde les valeurs par défaut */ }
 
   buildWheel();
+  el.gambleMax.textContent = `jusqu'à ×${Math.max(...CONFIG.wheel)} tes tours !`;
   el.homeDuration.textContent = `${Math.round(CONFIG.roundDurationMs / 1000)} secondes`;
   el.timeLeft.textContent = (CONFIG.roundDurationMs / 1000).toFixed(1);
   el.pseudo.focus();

@@ -107,7 +107,11 @@ body::before{
 /* ================================================================
    ÉCRAN 1 — accueil
    ================================================================ */
-#hero{position:relative; display:grid; place-items:center; isolation:isolate}
+/* `pointer-events:none` : le halo de rayons déborde largement sous le logo
+   et recouvrait le champ pseudo — un clic au milieu du champ tombait sur le
+   halo, seule la bande du bas restait cliquable. */
+#hero{position:relative; display:grid; place-items:center; isolation:isolate;
+  pointer-events:none}
 #logo{position:relative; z-index:1; width:min(76vw,420px); height:auto; display:block;
   filter:drop-shadow(0 14px 28px rgba(0,0,0,.5))}
 /* Le rayonnement du logo, repris de l'artwork — cantonné derrière lui. */
@@ -125,7 +129,7 @@ body::before{
   animation:halo 70s linear infinite;
 }
 @media (prefers-reduced-motion:reduce){#burst{animation:none}}
-#home-card{max-width:520px}
+#home-card{max-width:520px; position:relative; z-index:2}
 .tagline{font-family:var(--display); font-weight:600;
   font-size:clamp(17px,2.6vh,23px); line-height:1.35; color:#fff; margin-bottom:1.1em}
 .tagline b{color:var(--yellow)}
@@ -192,15 +196,38 @@ body::before{
 @keyframes flash{0%{opacity:.32}100%{opacity:0}}
 
 #countdown{position:absolute; inset:0; z-index:20; display:grid; place-items:center;
-  text-align:center; padding:20px; background:rgba(14,4,42,.86); backdrop-filter:blur(10px)}
+  text-align:center; padding:20px; background:rgba(14,4,42,.86); backdrop-filter:blur(10px);
+  transition:background .5s ease, backdrop-filter .5s ease}
+/* Voile léger : le joueur se voit dans la caméra pendant les consignes et
+   le décompte, et peut se placer. */
+#countdown.see{background:rgba(14,4,42,.24); backdrop-filter:none}
+#countdown.intro #countdownNum,
+#countdown.intro #countdownMsg{display:none}
+#countdown.intro #introText{display:block}
+
+#introText{display:none; max-width:16em; margin:0 auto;
+  font-family:var(--display); font-weight:700; line-height:1.18;
+  font-size:clamp(30px,5.8vh,60px); color:#fff;
+  /* Pastille sticker : lisible quel que soit ce que filme la caméra. */
+  background:rgba(25,8,69,.9); border:var(--stroke) solid #fff; border-radius:34px;
+  box-shadow:var(--lift) var(--lift) 0 0 var(--mint);
+  padding:.55em .95em;
+  opacity:0; transform:translateY(18px) scale(.97);
+  transition:opacity .65s ease, transform .65s cubic-bezier(.2,1.3,.35,1)}
+#introText.show{opacity:1; transform:none}
+#introText b{color:var(--yellow)}
 #countdownNum{font-family:var(--display); font-weight:700; line-height:1;
-  font-size:clamp(90px,19vh,210px); color:var(--yellow);
-  text-shadow:0 0 0 #fff, 6px 6px 0 var(--violet);
+  font-size:clamp(110px,24vh,260px); color:var(--yellow);
+  /* Contour blanc : le chiffre doit se lire par-dessus la vidéo. */
+  -webkit-text-stroke:8px #fff; paint-order:stroke fill;
+  text-shadow:9px 9px 0 var(--violet);
   animation:tick .85s cubic-bezier(.2,1.5,.3,1)}
 @keyframes tick{from{transform:scale(1.6); opacity:0}to{transform:scale(1); opacity:1}}
 /* Les emoji ne supportent pas l'ombre de texte colorée du décompte :
    on repasse en rendu simple pour « 🙂 » ou « 🚫 ». */
-#countdownNum.plain{font-size:clamp(66px,13vh,150px); text-shadow:none; color:#fff}
+#countdownNum.plain{font-size:clamp(66px,13vh,150px); text-shadow:none; color:#fff;
+  -webkit-text-stroke:0}
+#countdownNum.stop{color:var(--red); font-size:clamp(100px,22vh,240px)}
 #countdownMsg{margin-top:.5em; font-family:var(--display); font-weight:600;
   font-size:clamp(16px,2.5vh,24px); color:#fff}
 #countdownMsg b{color:var(--yellow)}
@@ -217,7 +244,7 @@ body::before{
 /* ================================================================
    ÉCRAN 3 — roulette
    ================================================================ */
-#gambleCard{max-width:620px; position:relative; overflow:hidden;
+#gambleCard{max-width:740px; position:relative; overflow:hidden;
   box-shadow:var(--lift) var(--lift) 0 0 var(--pink)}
 #gambleCard.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97)}
 @keyframes shake{
@@ -230,7 +257,7 @@ body::before{
   font-size:clamp(50px,9vh,82px); font-variant-numeric:tabular-nums; color:var(--yellow)}
 .unit{font-family:var(--display); font-weight:600; font-size:clamp(15px,2.1vh,19px); color:var(--muted)}
 
-#wheelWrap{position:relative; width:min(50vh,372px); aspect-ratio:1; margin:12px auto 6px}
+#wheelWrap{position:relative; width:min(36vh,330px); aspect-ratio:1; margin:10px auto 4px}
 #wheel{width:100%; height:100%; display:block; filter:drop-shadow(0 16px 34px rgba(0,0,0,.55))}
 #wheelGroup text{font-family:var(--display); font-weight:700;
   paint-order:stroke; stroke-width:4px; stroke-linejoin:round}
@@ -248,15 +275,35 @@ body::before{
 #wheelHub.win{animation:hub .6s cubic-bezier(.2,1.7,.35,1)}
 @keyframes hub{36%{transform:scale(1.22)}}
 
-#gambleResult{min-height:clamp(62px,10vh,92px); display:grid; place-items:center}
+#gambleResult{display:grid; place-items:center}
 #gambleVerdict{font-family:var(--display); font-weight:700; line-height:1;
   font-size:clamp(30px,6.4vh,58px)}
 #gambleVerdict.in{animation:verdict .55s cubic-bezier(.2,1.7,.4,1)}
 @keyframes verdict{from{transform:scale(.3) rotate(-10deg); opacity:0}to{transform:none; opacity:1}}
 #gambleDetail{margin-top:.45em; font-size:clamp(13px,1.9vh,16px); color:var(--muted)}
-#gambleActions{display:flex; gap:12px; margin-top:4px}
-#gambleActions .btn{flex:1; font-size:clamp(14px,2vh,18px)}
-#btnAfterGamble{width:100%; margin-top:12px; font-size:clamp(16px,2.3vh,20px)}
+/* Le joueur sort de 10 s de toupie : il voit flou. Les deux choix doivent
+   être énormes, et la roue doit clairement donner plus envie que l'autre. */
+#gambleActions{display:flex; flex-direction:column; gap:16px; margin-top:8px}
+.btn-spin{position:relative; overflow:hidden; width:100%;
+  flex-direction:column; gap:.12em; padding:.5em 1em .55em;
+  border-width:6px; background:var(--yellow); color:var(--violet);
+  box-shadow:0 10px 0 0 var(--pink)}
+.btn-spin:active:not(:disabled){box-shadow:0 3px 0 0 var(--pink)}
+.btn-spin:hover:not(:disabled){filter:brightness(1.05)}
+.cta-main{font-size:clamp(32px,6.4vh,62px); line-height:1; letter-spacing:.01em}
+.cta-sub{font-family:var(--body); font-weight:900; font-size:clamp(15px,2.4vh,22px);
+  color:#C2179E; letter-spacing:.02em}
+/* Reflet qui balaie le bouton : il attire l'œil sans rien à lire. */
+.btn-spin::after{content:""; position:absolute; top:-30%; bottom:-30%; left:-45%; width:32%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.8),transparent);
+  transform:skewX(-18deg); animation:shine 2.6s ease-in-out infinite; pointer-events:none}
+@keyframes shine{0%{left:-45%} 55%,100%{left:125%}}
+.btn-keep{width:100%; font-size:clamp(20px,3.4vh,32px); padding:.5em 1em;
+  border-width:5px;
+  /* .btn est un flex : texte et montant sont deux éléments séparés par le
+     gap, qui doit valoir une espace normale. */
+  gap:.28em}
+#btnAfterGamble{width:100%; margin-top:14px; font-size:clamp(22px,3.8vh,36px); padding:.55em 1em}
 
 /* ================================================================
    ÉCRAN 4 — résultat
@@ -292,7 +339,7 @@ body::before{
 
   <div id="home-card" class="card">
     <p class="tagline">
-      Un max de tours sur toi-même en <b id="homeDuration">15 secondes</b>.
+      Un max de tours sur toi-même en <b id="homeDuration">10 secondes</b>.
     </p>
 
     <form id="homeForm" autocomplete="off" novalidate>
@@ -333,7 +380,7 @@ body::before{
       </div>
 
       <div id="timeBadge" class="chip">
-        <div id="timeLeft">15.0</div>
+        <div id="timeLeft">10.0</div>
         <div class="label">Secondes</div>
       </div>
 
@@ -345,6 +392,7 @@ body::before{
       <div>
         <div id="countdownNum">3</div>
         <p id="countdownMsg">Place-toi face à la caméra…</p>
+        <p id="introText"></p>
       </div>
     </div>
 
@@ -379,10 +427,13 @@ body::before{
     </div>
 
     <div id="gambleActions">
-      <button id="btnBank" type="button" class="btn btn-ghost">
-        Garder <span id="bankAmount"></span>
+      <button id="btnGamble" type="button" class="btn btn-spin btn-pulse">
+        <span class="cta-main">🎰 Tourner la roue</span>
+        <span id="gambleMax" class="cta-sub">jusqu'à ×10 tes tours !</span>
       </button>
-      <button id="btnGamble" type="button" class="btn btn-hot btn-pulse">Tout miser&nbsp;🎰</button>
+      <button id="btnBank" type="button" class="btn btn-ghost btn-keep">
+        Garder mes <span id="bankAmount"></span>
+      </button>
     </div>
 
     <button id="btnAfterGamble" type="button" class="btn btn-primary" hidden>Terminer</button>
